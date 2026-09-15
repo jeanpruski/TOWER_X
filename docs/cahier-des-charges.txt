@@ -1,0 +1,150 @@
+TOWER X
+Game Design Document + Technical Specification
+Cahier des charges destiné à être transmis directement à un modèle de code. Construire par phases : valider d'abord le fun, le réseau et la stabilité du MVP.
+1. Concept et vision
+- Plateformer 2D vertical multijoueur persistant dans le navigateur. Tous les joueurs partagent la même tour procédurale infinie. Aucun lobby obligatoire, aucune manche et aucun reset global : le serveur est le monde.
+- Le joueur peut rejoindre à n'importe quel moment, en invité ou avec un compte. L'objectif est simplement de monter le plus haut possible.
+- Le jeu doit être agréable seul, coopératif/taquin à 2–5 joueurs et naturellement chaotique à 10–20+ joueurs.
+- Inspiration : lisibilité, verticalité et petits personnages 8-bit dans l'esprit de Micro Mages, sans copier assets, niveaux, personnages, palettes, UI ou musique.
+2. Boucle de jeu
+- Ouvrir le site → JOUER EN INVITÉ, SE CONNECTER ou CRÉER UN COMPTE.
+- Spawn dans un camp sûr choisi selon la progression et la population.
+- Courir, sauter, wall-jump, pousser, agripper, utiliser mécanismes et power-ups.
+- Activer des camps/checkpoints. Current Height peut baisser après une chute ; Personal Best ne baisse jamais.
+- La chute est physique : si possible le joueur retombe réellement dans les chunks inférieurs. Respawn uniquement sur hazard létal, hors-limites irrécupérable ou demande volontaire.
+- La partie globale ne se termine jamais.
+3. Invité et compte
+- Invité sans inscription : identité anonyme signée, pseudo modifiable, réglages et session conservés localement.
+- Compte MVP : email + mot de passe ; profil, PB, dernier camp, cosmétiques, stats et réglages persistés.
+- Un invité peut créer un compte plus tard et récupérer sa progression.
+- Auth : Argon2id, cookie HTTP-only Secure, HTTPS, rate limiting et validation serveur.
+- CTA principal de l'accueil : JOUER EN INVITÉ. L'inscription ne doit jamais bloquer le gameplay.
+4. Tour procédurale infinie
+- Découper le monde en chunks verticaux déterministes de 1–2 écrans. Le serveur possède un worldSeed persistant ; worldSeed + chunkIndex détermine le chunk canonique.
+- Ne jamais générer les routes obligatoires avec des plateformes totalement aléatoires. Utiliser une bibliothèque de chunks conçus à la main avec variations bornées.
+- Chaque template stocke : id, biome, dimensions, difficulté, anchors entrée/sortie, plateformes, hazards, mécanismes, pickups, tags de compatibilité et soloValidated.
+- Chaque route obligatoire doit être faisable en solo. Le multi peut ouvrir raccourcis/secrets ou faciliter une route.
+- Éviter répétitions immédiates et transitions incompatibles. Difficulté croissante mais oscillante.
+- Simuler seulement les chunks proches des joueurs ; les chunks distants restent des données déterministes. Prévoir tests headless de traversabilité.
+5. Camps, spawn et reconnexion
+- Camp sûr environ tous les 100 m : checkpoint, respawn et zone où push/grab hostile est désactivé ou très réduit.
+- Nouveau joueur : spawn dans un camp communautaire sûr un peu derrière la frontier active, idéalement près d'autres joueurs. Ne pas forcer les nouveaux à commencer à 0 après des mois.
+- Joueur de retour : dernier camp par défaut ; possibilité de rejoindre une zone communautaire sans perdre son PB.
+- Ne jamais spawn dans un collider/hazard. Protection push/grab ~2 s. Petite période de grâce à la déconnexion puis reconnexion au dernier état sûr.
+6. Contrôles
+- Clavier : A/D ou flèches = mouvement ; Espace = saut ; E = push/interact ; Shift ou F = grab ; Esc = menu.
+- Manette : stick gauche/D-pad = mouvement ; bouton Sud = saut ; Est/Ouest = push ; épaule/gâchette = grab ; Start = menu.
+- Utiliser Browser Gamepad API avec hot-plug. Le gameplay consomme des actions abstraites MOVE_X, JUMP, PUSH, GRAB, jamais des keycodes bruts.
+- Prévoir remapping, réduction shake/flashes, volumes et grab hold/toggle.
+7. Feeling et physique
+- Rendu client 60 FPS ; simulation serveur initiale 30 Hz.
+- Accélération rapide, air control lisible, saut variable, coyote time ~100 ms, jump buffer ~120 ms, wall slide et wall-jump généreux.
+- Les joueurs se collisionnent, peuvent se tenir sur la tête et former des piles.
+- Push : impulsion courte avec cooldown et caps. Grab : attache brève à un joueur/ledge ; la cible garde son contrôle mais ressent le poids.
+- Les corps en chute peuvent transmettre une impulsion plafonnée. Pas de HP au MVP : hazards = knockback, chute, stun bref ou respawn.
+- Anti-grief : camps sûrs, anti-chain-stun bref, caps de vitesse et ghosting progressif si une foule bloque durablement un passage.
+8. Power-ups
+- Feather : gravité réduite + saut plus haut ~12 s.
+- Charged Boots : un super-saut.
+- Grip Gloves : wall cling/grab améliorés ~15 s.
+- Bubble : absorbe un gros impact puis éclate.
+- Dash Rune : un dash horizontal aérien.
+- Heavy Rune : difficile à pousser, plus lourd sur mécanismes, saut légèrement réduit.
+- Ghost Rune : traverse les joueurs ~8 s mais ne peut pas pousser.
+- Spring Curse : chaque atterrissage rebondit ~10 s.
+- Magnet : attire les pickups proches, jamais les joueurs.
+- Aucune amélioration permanente de vitesse, saut, poids, hitbox ou push via le compte.
+9. Événements mondiaux
+- Low Gravity, Super Push, Earthquake, Bouncy World, Darkness, Rush, Tiny Mages, Big Mage.
+- Annonce serveur avec petit compte à rebours ; durée typique 45–90 s. Aucun événement ne peut supprimer PB ou checkpoint.
+10. Biomes
+- Castle/Ruins : murs, shafts, pics, pierres mobiles.
+- Caves : passages serrés, rochers, ressorts, obscurité.
+- Forest : lianes, branches, vent, plateformes organiques.
+- Ice : faible friction, glace cassable, stalactites.
+- Factory : convoyeurs, pistons, lifts, pressure plates.
+- Clouds : vent et plateformes molles/disparaissantes.
+- Arcane : téléporteurs, zones de gravité, blocs magiques.
+- Void/Space : faible gravité, plateformes flottantes. Les biomes peuvent revenir plus haut avec variantes.
+11. Mécanismes multijoueurs
+- Weight Lift : fonctionne seulement dans une plage de poids ; trop de joueurs le bloque.
+- Pressure Plate : ouvre un raccourci facultatif.
+- Narrow Shaft : facile seul, congestion naturelle en foule ; anti-blocking après délai.
+- Human Chain Secret : secret/raccourci favorisant grab + stacking.
+- Timed Door : ouverture courte créant une ruée ; rater ne fait que retarder.
+- Falling Bridge : réagit au poids total, reset rapide, jamais de piège permanent.
+- Le nombre de joueurs doit modifier la difficulté sociale, pas simplement multiplier les ennemis.
+12. Social et records
+- Afficher Personal Best, Current Height, Current Frontier et éventuellement leaderboard all-time.
+- Stats fun : joueurs sauvés, pushes, plus grosse chute, plus longue chaîne humaine, camps atteints, morts/chutes.
+- Front Runner : petite couronne sur le joueur actif le plus haut.
+- Roue d'emotes : hello, help, wait, sorry, laugh. Pas de chat texte au MVP.
+13. Direction artistique
+- Objectif : une cartouche fantasy 8-bit perdue, ramenée à la vie dans un navigateur moderne.
+- Canvas logique ~320×180 avec scaling nearest-neighbor.
+- Personnages mages/aventuriers ~12–16 pixels logiques, silhouettes fortes, grands chapeaux/capuches, animations 2–4 frames.
+- Palette restreinte par biome (~12–20 couleurs actives). Backgrounds plus sombres ; gameplay/hazards/pickups très contrastés.
+- Particules chunky 1–3 px, poussière, glyphes, étoiles d'impact, squash/stretch léger.
+- Caméra verticale avec look-ahead ; shake faible et borné. Pseudos seulement à proximité et masqués en foule.
+- HUD moderne minimal ; filtre CRT/scanlines optionnel OFF par défaut. SFX chiptune crunchy et musique mélodique 8-bit.
+- Cosmétiques : robes, chapeaux, palettes, trails, emotes, nameplates ; jamais d'effet physique.
+14. Stack technique retenue
+- Client jeu : TypeScript + Phaser 3 + Vite.
+- UI web : React + TypeScript pour landing/auth/settings/profile/leaderboards ; canvas Phaser monté dans React.
+- Realtime : Node.js + TypeScript + Socket.IO.
+- Serveur gameplay autoritaire, séparé de HTTP/auth.
+- Physique serveur : AABB/kinematic platformer custom/simple ; éviter un gros moteur rigid-body synchronisé au MVP.
+- DB : PostgreSQL + Prisma. Redis non obligatoire au MVP ; ajouter pour multi-process/pub-sub/scaling.
+- Validation : Zod. Tests : Vitest + Playwright + simulations headless.
+- Déploiement : Docker, 1 game-server + PostgreSQL managé au départ, reverse proxy/TLS.
+- Observabilité : Pino + /health + métriques joueurs, tick duration, RTT, chunks actifs, mémoire, erreurs.
+15. Architecture réseau
+- Serveur autoritaire pour positions acceptées, interactions, chunks, pickups, power-ups, camps, PB et événements.
+- Client : prédiction locale ; serveur : réconciliation ; joueurs distants : interpolation.
+- Le client envoie input state + numéro de séquence, jamais une position absolue de confiance.
+- Buffer d'interpolation distant ~80–120 ms à régler par playtest.
+- Area of Interest vertical : envoyer seulement joueurs/entités à environ ±2–4 écrans/chunks.
+- Ne jamais faire confiance au client pour PB, checkpoint, pickup ou power-up. Rate-limit push/grab.
+16. Monorepo et données
+- apps/web : React + Phaser ; apps/game-server : serveur Socket.IO.
+- packages/shared : types/Zod/protocole ; packages/game-core : mouvement/collisions/chunks ; packages/db : Prisma.
+- User(id,email,passwordHash,createdAt). PlayerProfile(id,userId?,guestIdentity?,displayName,cosmeticConfig,personalBest,lastCampId,...). CampProgress(profileId,campId,activatedAt). World(id,worldSeed,worldVersion,frontierMetadata).
+- Socket client→server : join, input{seq,moveX,jump,push,grab,clientTime}, respawn, emote.
+- Socket server→client : welcome, snapshot, chunks, worldEvent, feed, profileUpdate. Tous les messages sont versionnés avec TypeScript/Zod.
+17. Sécurité, performance et outils dev
+- Valider tous les payloads, rate-limit HTTP/realtime, nettoyer les pseudos, aucun HTML arbitraire, cookies sécurisés et HTTPS.
+- Détecter téléportations/mouvements impossibles et cadence d'actions invalide.
+- Commencer avec un seul processus de monde. Mesurer joueurs, corps/chunks actifs, tick, trafic socket, RTT, CPU et mémoire.
+- Si nécessaire plus tard, partitionner par régions verticales avec overlap/handoff ; ne pas complexifier le MVP maintenant.
+- Overlay debug : chunk ID/index/seed, collision boxes, anchors, altitude, server tick, RTT, player count.
+- Prévoir une commande dev de téléportation vers un chunk et un validateur/bot headless.
+18. Phase 1 — MVP
+- React/Vite + Phaser ; guest identity ; compte email/password basique.
+- 1 biome original + 15–30 chunks ; séquençage déterministe.
+- Run/jump/wall-jump ; clavier + manette.
+- Socket.IO + serveur autoritaire + interpolation distante.
+- Collisions joueurs + push.
+- Camps, Current Height + PB, respawn/reconnect, HUD simple, premier déploiement.
+- Ne pas ajouter encore : ennemis complexes, chat texte, inventaire, boutique, guildes, quêtes, crafting.
+19. Phase 2 — valider le social
+- Grab, stacking amélioré, anti-blocking, 5–8 power-ups, plaques/lifts/portes, emotes, stats fun, leaderboard frontier, conversion invité→compte et cosmétiques.
+- Playtests obligatoires à 1, 2, 5, 10 et 20+ joueurs. Cible : solo agréable ; 2–5 favorise l'entraide ; 10+ devient chaotique sans être injouable.
+20. Phase 3 — monde vivant
+- Biomes multiples, événements mondiaux, génération enrichie, collectibles/cosmétiques, feed social, saisons purement cosmétiques, observabilité/scaling avancés et nouveaux mécanismes sociaux.
+21. Definition of Done du prototype
+- Un invité joue en quelques secondes.
+- Deux navigateurs voient exactement le même monde.
+- Clavier et manette sont agréables.
+- Les joueurs distants restent stables.
+- Push est déjà drôle à plusieurs.
+- Checkpoint, respawn et reconnect fonctionnent.
+- PB est persisté.
+- Les chunks sont identiques pour tous.
+- Un client ne peut pas simplement envoyer une fausse altitude.
+- 10+ joueurs proches ne font pas s'effondrer le tick serveur.
+22. Instruction pour le modèle de code
+- Commencer par produire le monorepo, le README de lancement local et la Phase 1 uniquement.
+- Ne pas coder les Phases 2/3 avant que la Phase 1 fonctionne.
+- Utiliser TypeScript strict, ajouter des tests à chaque sous-système et documenter les décisions.
+- Ne jamais faire confiance aux coordonnées envoyées par le client.
+- Privilégier une implémentation simple, observable et testable à une architecture prématurément complexe.

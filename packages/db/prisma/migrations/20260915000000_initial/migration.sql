@@ -1,0 +1,6 @@
+CREATE TABLE "User" ("id" TEXT PRIMARY KEY, "email" TEXT NOT NULL UNIQUE, "passwordHash" TEXT NOT NULL, "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP);
+CREATE TABLE "PlayerProfile" ("id" TEXT PRIMARY KEY, "userId" TEXT UNIQUE REFERENCES "User"("id"), "guestIdentity" TEXT UNIQUE, "displayName" TEXT NOT NULL, "cosmeticConfig" JSONB NOT NULL, "settings" JSONB NOT NULL, "personalBest" INTEGER NOT NULL DEFAULT 0, "lastCampId" INTEGER NOT NULL DEFAULT 0, "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP);
+CREATE TABLE "CampProgress" ("profileId" TEXT NOT NULL REFERENCES "PlayerProfile"("id") ON DELETE CASCADE, "campId" INTEGER NOT NULL, "activatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY ("profileId", "campId"));
+CREATE TABLE "Session" ("tokenHash" TEXT PRIMARY KEY, "profileId" TEXT NOT NULL REFERENCES "PlayerProfile"("id") ON DELETE CASCADE, "expiresAt" TIMESTAMP(3) NOT NULL);
+CREATE INDEX "Session_expiresAt_idx" ON "Session"("expiresAt");
+CREATE TABLE "World" ("id" TEXT PRIMARY KEY, "worldSeed" INTEGER NOT NULL, "worldVersion" INTEGER NOT NULL DEFAULT 1, "frontierMetadata" JSONB NOT NULL);

@@ -1,0 +1,23 @@
+{
+  "name": "@tower/web",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@fontsource-variable/dm-sans": "^5.3.0",
+    "@fontsource-variable/space-grotesk": "^5.3.0",
+    "@tower/game-core": "*",
+    "@tower/shared": "*",
+    "lucide-react": "^0.468.0",
+    "phaser": "3.90.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "socket.io-client": "^4.8.1",
+    "vite": "^6.3.6"
+  }
+}

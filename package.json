@@ -1,0 +1,38 @@
+{
+  "name": "tower-x",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "workspaces": ["apps/*", "packages/*"],
+  "engines": { "node": ">=22.12.0" },
+  "scripts": {
+    "dev": "concurrently -k -n world,web -c magenta,green \"npm run dev -w @tower/game-server\" \"npm run dev -w @tower/web\"",
+    "build": "npm run typecheck && npm run build -w @tower/web",
+    "typecheck": "tsc --noEmit",
+    "start": "npm run start -w @tower/game-server",
+    "test": "vitest run",
+    "test:e2e": "playwright test",
+    "validate:chunks": "node --import tsx scripts/validate-chunks.ts",
+    "test:load": "node --import tsx scripts/load-test.ts",
+    "db:generate": "prisma generate --schema packages/db/prisma/schema.prisma",
+    "db:push": "prisma db push --schema packages/db/prisma/schema.prisma",
+    "db:migrate": "prisma migrate deploy --schema packages/db/prisma/schema.prisma",
+    "postinstall": "npm run db:generate"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.51.1",
+    "@types/cookie": "^0.6.0",
+    "@types/express": "^5.0.1",
+    "@types/node": "^22.13.10",
+    "@types/react": "^19.0.10",
+    "@types/react-dom": "^19.0.4",
+    "@vitejs/plugin-react": "^4.3.4",
+    "concurrently": "^9.1.2",
+    "prisma": "~6.19.0",
+    "typescript": "~5.8.3",
+    "vitest": "^4.1.11",
+    "vite": "^6.3.6"
+  },
+  "dependencies": { "tsx": "^4.19.3" },
+  "overrides": { "deepmerge-ts": "^8.0.0" }
+}

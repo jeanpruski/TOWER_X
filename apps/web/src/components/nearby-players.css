@@ -1,0 +1,56 @@
+.game-page .game-layout { grid-template-columns: minmax(0, 1fr) 272px; }
+.game-sidebar .player-label { margin-bottom: 12px; }
+.game-sidebar .altitude-card { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 7px 10px; padding: 13px; margin-bottom: 0; grid-column: 1 / -1; grid-row: auto; }
+.game-sidebar .altitude-card .section-label { grid-column: 1; font-size: 7px; letter-spacing: .4px; }
+.game-sidebar .big-height { grid-column: 2; grid-row: 1 / 4; font-size: 42px; margin: 0; letter-spacing: -2px; }
+.game-sidebar .big-height > span { font-size: 14px; margin-left: 4px; }
+.game-sidebar .altitude-card .height-line { grid-column: 1; }
+.game-sidebar .altitude-card > small { grid-column: 1; margin: 0; font-size: 8px; }
+.nearby-panel { margin: 16px 0 7px; border: 1px solid #3a4b34; border-radius: 6px; background: #1d291f; overflow: hidden; }
+.nearby-online { display: flex; align-items: center; gap: 8px; padding: 12px 13px; border-bottom: 1px solid #35442e; color: #c7dcae; }
+.nearby-online strong { font-size: 9px; font-weight: 650; letter-spacing: .6px; }
+.nearby-online svg { color: #95b277; }
+.nearby-online .live-dot { margin-left: auto; }
+.nearby-online .live-dot.offline { background: #bcac7b; }
+.nearby-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 15px 12px 13px; }
+.nearby-heading h2 { font: 500 16px var(--display); letter-spacing: -.5px; color: #e0e8d4; }
+.nearby-heading > span { color: #a5bc8a; font: 11px var(--display); font-variant-numeric: tabular-nums; }
+.nearby-columns { display: grid; grid-template-columns: minmax(0, 1fr) 44px 50px; gap: 5px; margin: 0 12px 9px; color: #91a77d; font-size: 7px; letter-spacing: .5px; }
+.nearby-columns span:not(:first-child) { text-align: right; }
+.nearby-group { display: flex; align-items: center; gap: 4px; padding: 7px 12px 3px; color: #91a77d; font-size: 7px; letter-spacing: .65px; }
+.nearby-group small { margin-left: auto; color: #819574; font-size: 7px; letter-spacing: .2px; }
+.nearby-list { padding: 0; margin: 0 6px; list-style: none; }
+.nearby-player { display: grid; grid-template-columns: 17px 20px minmax(0, 1fr) 44px 50px; align-items: center; gap: 5px; min-height: 32px; padding: 3px 6px; font-variant-numeric: tabular-nums; border-radius: 3px; }
+.nearby-player + .nearby-player { border-top: 1px solid #34422d65; }
+.nearby-rank { color: #819872; font: 9px var(--display); text-align: center; }
+.nearby-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #c5d4b6; font-size: 10px; }
+.nearby-name .rare-badge { display: block; color: #ffe0a1; font-size: 7px; line-height: 1.4; letter-spacing: .4px; }
+.nearby-height { color: #dfebd0; font: 11px var(--display); text-align: right; white-space: nowrap; }
+.nearby-height small { color: #94a682; font-size: 8px; }
+.nearby-gap { text-align: right; color: #a1b38f; font-size: 9px; white-space: nowrap; }
+.nearby-gap.positive { color: #c3df9c; }
+.nearby-gap.negative { color: #b0c4da; }
+.nearby-self { margin-top: 7px; margin-bottom: 5px; }
+.nearby-player.is-self { background: #33452a; border: 1px solid #607c45; min-height: 37px; padding: 3px 5px; }
+.nearby-player.is-self .nearby-name { font-size: 9px; font-weight: 750; text-transform: uppercase; letter-spacing: .7px; color: #d3efa9; }
+.nearby-player.is-self .nearby-rank { color: #c5dba9; }
+.nearby-empty { color: #91a77d; font-size: 9px; padding: 10px 13px; line-height: 1.5; }
+.nearby-caption { margin-top: 12px; padding: 10px 12px; border-top: 1px solid #34422e; color: #91a77d; font-size: 8px; line-height: 1.5; }
+.color-options { flex-wrap: wrap; }
+.color-options button { flex-shrink: 0; }
+@media (max-width: 1100px) and (min-width: 801px) {
+  .game-page .game-layout { grid-template-columns: minmax(0, 1fr) 256px; }
+  .nearby-player { grid-template-columns: 14px 20px minmax(0, 1fr) 43px 48px; gap: 4px; }
+  .nearby-name { font-size: 9px; }
+}
+@media (max-width: 800px) {
+  .game-page .game-layout { grid-template-columns: 1fr; }
+  .nearby-panel { grid-column: 1 / -1; margin: 18px 0 7px; }
+  .game-sidebar > .stat-row { grid-column: 1 / -1; }
+  .nearby-player { grid-template-columns: 22px 24px minmax(0, 1fr) 66px 64px; min-height: 35px; gap: 8px; padding: 4px 10px; }
+  .nearby-columns { grid-template-columns: minmax(0, 1fr) 66px 64px; gap: 8px; margin-right: 16px; }
+  .nearby-name { font-size: 11px; }
+  .nearby-height { font-size: 12px; }
+  .nearby-gap { font-size: 10px; }
+  .nearby-player.is-self { padding: 4px 9px; }
+}

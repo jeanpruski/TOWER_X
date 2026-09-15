@@ -1,0 +1,74 @@
+.modal.modal-wardrobe { width: min(960px, calc(100vw - 28px)); max-width: none; }
+.wardrobe { min-width: 0; }
+.wardrobe-preview { display: flex; align-items: center; justify-content: center; gap: 25px; min-height: 142px; border: 1px solid #d7dfca; background: #e9eedf; border-radius: 8px; padding: 17px; margin-bottom: 16px; }
+.wardrobe-preview > div { display: flex; flex-direction: column; gap: 7px; min-width: 0; }
+.wardrobe-preview canvas { flex-shrink: 0; }
+.wardrobe-preview.wearing-rare { background: radial-gradient(ellipse at 20% 50%, #eece8655, transparent 60%), #f0e8d7; border-color: #bca16c; }
+.wardrobe-signature { margin: -6px 0 16px; font-size: 10px; color: #806133; line-height: 1.6; }
+.wardrobe-eyebrow { font-size: 8px; color: #7d8c6d; letter-spacing: 1px; }
+.wardrobe-preview strong { font-family: var(--display); font-size: 22px; letter-spacing: -.6px; color: #3e5434; }
+.wardrobe-preview > div > span:not(:first-child) { font-size: 12px; color: #6b7a5d; }
+.wardrobe-preview small { display: flex; align-items: center; gap: 5px; font-size: 10px; color: #897344; margin-top: 8px; }
+.wardrobe-note { font-size: 11px; line-height: 1.7; padding: 12px; background: #f2ecd9; color: #786c4a; border-radius: 5px; margin-bottom: 16px; }
+.wardrobe-colors { border: 0; margin: 0 0 18px; padding: 0; min-width: 0; }
+.wardrobe-colors legend { font-size: 11px; font-weight: 650; margin-bottom: 8px; color: #536149; }
+.wardrobe-colors .color-options { gap: 8px; }
+.wardrobe-colors .color-options button { width: 30px; height: 30px; }
+.wardrobe-tabs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; border-bottom: 1px solid #d4dec5; padding-bottom: 9px; margin-bottom: 12px; }
+.wardrobe-tabs button { padding: 10px 3px; border-radius: 5px; color: #849173; font-size: 12px; font-weight: 650; }
+.wardrobe-tabs button[aria-selected=true] { background: #e4ecd7; color: #4c653b; }
+.wardrobe-tabs small { display: block; margin-top: 4px; font-size: 8px; font-weight: 400; }
+.wardrobe-category-note { font-size: 11px; line-height: 1.6; color: #627255; margin: 0 0 12px; }
+.wardrobe-tools { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
+.wardrobe-tools input { min-height: 36px!important; }
+.wardrobe-tools > div { display: flex; gap: 6px; }
+.wardrobe-tools button { font-size: 10px; color: #6f7b60; border: 1px solid #d2d8c5; border-radius: 20px; padding: 6px 12px; }
+.wardrobe-tools button[aria-pressed=true] { background: #435638; color: #f1f0dc; border-color: #435638; }
+.wardrobe-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 9px; max-height: 370px; overflow-y: auto; overscroll-behavior: contain; padding: 3px; scrollbar-color: #a7b195 #e6eadc; }
+.wardrobe-empty { grid-column: 1 / -1; text-align: center; padding: 22px; font-size: 12px; color: #7d8c6d; }
+.costume-choice { min-width: 0; display: flex; align-items: center; flex-direction: column; gap: 4px; border: 1px solid #d6ddca; border-radius: 6px; padding: 9px 3px 7px; background: #f0f1e6; }
+.costume-choice:hover:not(:disabled) { background: #e6edd9; border-color: #95ad78; }
+.costume-choice.selected { border-color: #74934e; box-shadow: inset 0 0 0 1px #74934e; background: #e6eed8; }
+.costume-choice strong { font-size: 11px; font-weight: 600; color: #536749; line-height: 1.3; text-align: center; }
+.costume-choice small { font-size: 8px; display: flex; align-items: center; gap: 3px; color: #829070; min-height: 13px; }
+.costume-choice.rare { background: #f0ead9; border-color: #d1bc8a; }
+.costume-choice.rare strong,.costume-choice.rare small { color: #8b7248; }
+.costume-choice.rare.selected { border-color: #ad8645; box-shadow: inset 0 0 0 1px #ad8645; }
+.costume-choice.rare canvas { background: radial-gradient(ellipse, #e9c97438, transparent 70%); }
+.costume-choice:disabled { cursor: default; opacity: 1; }
+.wardrobe-caption { font-size: 10px; line-height: 1.7; color: #8a947d; margin-top: 13px; }
+.auth-form .wardrobe { margin-top: 5px; border-top: 1px solid #d7dfca; padding-top: 18px; }
+.wardrobe-entry { width: 100%; margin: 0 0 14px; display: flex; align-items: center; gap: 8px; font-size: 11px; padding: 11px; border: 1px solid; border-radius: 5px; }
+.wardrobe-entry small { display: flex; align-items: center; gap: 4px; margin-left: auto; color: #d3bd87; }
+.wardrobe-entry:hover { filter: brightness(1.2); }
+.game-sidebar .wardrobe-entry { color: #d3ddb5; border-color: #536247; background: #263226; grid-column: 1 / -1; }
+.relic-hint { display: flex; align-items: center; justify-content: center; gap: 6px; color: #d3bd87; font-size: 9px; line-height: 1.6; margin-top: 8px; }
+@media(max-width: 480px) {
+  .modal.modal-wardrobe { width: calc(100vw - 16px); padding: 16px; }
+  .wardrobe-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 7px; }
+  .wardrobe-preview { gap: 15px; padding: 12px; }
+  .wardrobe-preview strong { font-size: 19px; }
+  .wardrobe-colors .color-options { gap: 7px; }
+  .wardrobe-colors .color-options button { width: 28px; height: 28px; }
+}
+@media(min-width: 760px) {
+  .wardrobe-tools { flex-direction: row; align-items: center; }
+  .wardrobe-tools input { flex: 1; min-width: 0; }
+  .wardrobe-tools > div { flex-shrink: 0; }
+}
+
+.wardrobe-color-target { display: flex; gap: 6px; margin-bottom: 12px; }
+.wardrobe-color-target button { flex: 1; display: flex; justify-content: center; align-items: center; gap: 6px; border: 1px solid #c7d3b8; border-radius: 6px; padding: 9px 4px; font-size: 11px; color: #536749; }
+.wardrobe-color-target button[aria-pressed=true] { background: #435638; color: #fff9e8; border-color: #435638; }
+.wardrobe-color-target i, .wardrobe-color-defaults i { display: inline-block; width: 12px; height: 12px; border-radius: 50%; border: 1px solid #879b7b; flex-shrink: 0; }
+.wardrobe-color-defaults { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.wardrobe-color-defaults button { display: flex; align-items: center; gap: 5px; font-size: 10px; padding: 6px 9px; border: 1px solid #c7d3b8; border-radius: 5px; color: #536749; }
+.wardrobe-color-defaults button[aria-pressed=true] { background: #e0ebd3; border-color: #74934e; }
+.wardrobe-colors:disabled .color-options { opacity: .55; }
+#costume-tab-shoes { font-size: 11px; }
+[aria-labelledby=costume-tab-shoes] .costume-choice canvas { margin: 12px 0; }
+
+.costume-art { position: relative; display: flex; align-items: center; justify-content: center; overflow: hidden; border-radius: 5px; }
+.costume-choice.locked .costume-art canvas { filter: blur(4px) saturate(.5); opacity: .5; }
+.costume-lock { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: #66522e; }
+.costume-lock svg { background: #f5eddaed; border: 1px solid #b59a68; border-radius: 7px; padding: 5px; box-sizing: content-box; }
