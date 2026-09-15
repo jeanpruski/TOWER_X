@@ -188,6 +188,28 @@ l'hébergeur et vérifier le fichier de démarrage réellement utilisé.
 Après résolution, arrêter l'application, restaurer le lanceur normal avec
 `cp ops/towerx-start.cjs ../towerx-start.cjs` depuis le dépôt, puis redémarrer.
 
+### Prisma : moteur OpenSSL manquant sous Passenger
+
+Sur la cible N0C observée, la génération dans le terminal SSH a sélectionné
+`debian-openssl-1.0.x`, tandis que Passenger a demandé `debian-openssl-1.1.x`.
+Le schéma inclut donc `binaryTargets = ["native", "debian-openssl-1.1.x"]` :
+Prisma conserve le moteur détecté lors de l'installation et ajoute celui demandé
+par Passenger.
+
+Après récupération de cette correction, arrêter l'application dans N0C, activer
+son environnement Node.js dans le terminal, puis exécuter :
+
+```bash
+cd ~/tower-x/project
+git pull --ff-only origin master
+npm run db:generate
+```
+
+Cette modification concerne le client Prisma et ne nécessite aucune migration
+de la base ni recompilation du front. Démarrer l'application dans N0C puis vérifier
+`/health`. Si un affichage temporaire des erreurs détaillées a été activé dans
+le `.htaccess` public, restaurer sa configuration de production après le diagnostic.
+
 ## Mises à jour
 
 Sauvegarder PostgreSQL et arrêter l'application dans N0C, puis dans son
@@ -212,6 +234,7 @@ Ne pas forcer un `git pull` en cas de conflit : examiner les fichiers concernés
 - [The World : Node.js et PostgreSQL](https://www.planethoster.com/en/World-Hosting)
 - [Port géré par Passenger](https://www.phusionpassenger.com/docs/advanced_guides/in_depth/node/reverse_port_binding.html)
 - [Réglages des processus Passenger](https://www.phusionpassenger.com/docs/references/config_reference/apache/)
+- [Cibles binaires du client Prisma 6](https://docs.prisma.io/docs/orm/v6/reference/prisma-schema-reference#binarytargets-options)
 
 Cette préparation ne constitue pas un déploiement sur ton compte. Les réglages
 Passenger, le HTTPS et les connexions WebSocket doivent être validés sur la cible.
