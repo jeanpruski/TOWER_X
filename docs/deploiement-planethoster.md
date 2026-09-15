@@ -2,7 +2,8 @@
 
 Le serveur Node.js fournit le site compilé, les comptes et le multijoueur sur
 le même sous-domaine. Les sauvegardes de production vont dans PostgreSQL.
-Cette procédure utilise le fichier `app.cjs` à la racine du projet.
+Cette procédure utilise `towerx-start.cjs` à la racine de l'application N0C.
+Ce petit lanceur charge `project/app.cjs`, qui démarre le jeu dans le même processus.
 
 ## 1. Préparer l'hébergement
 
@@ -33,9 +34,10 @@ Cloner le dépôt dans un dossier privé du compte, en dehors de `public_html` :
 mkdir -p ~/tower-x
 cd ~/tower-x
 git clone https://github.com/jeanpruski/TOWER_X.git project
+cp project/ops/towerx-start.cjs ./towerx-start.cjs
 ```
 
-Le dépôt doit contenir `app.cjs` et `ops/planethoster.env.example`.
+Le dépôt doit contenir `app.cjs`, `ops/towerx-start.cjs` et `ops/planethoster.env.example`.
 Pour un dépôt privé, utiliser l'accès GitHub du serveur.
 On peut aussi transférer le projet par SFTP, sans `.env`, `.data`, `.git`,
 `node_modules` ni les dossiers `dist` du Mac.
@@ -44,6 +46,21 @@ La racine de l'application N0C sera `tower-x`, et le dépôt sera dans
 `tower-x/project`. Ce sous-dossier permet à npm de gérer les dépendances du
 monorepo sans remplacer le lien `node_modules` que N0C peut créer dans son propre
 répertoire d'application.
+
+L'arborescence attendue est :
+
+```text
+tower-x/                   ← répertoire d'application N0C
+├── towerx-start.cjs        ← fichier de démarrage N0C
+└── project/               ← dépôt Git
+    ├── app.cjs
+    ├── .env               ← configuration privée du jeu
+    └── package.json
+```
+
+Copier le lanceur avant de le sélectionner dans N0C. Si le répertoire de ton
+application porte un autre nom, comme `towerx-api`, utiliser ce nom à la place
+de `tower-x` dans les chemins du guide.
 
 ## 3. Déclarer l'application
 
@@ -55,7 +72,7 @@ Dans **Langages → Node.js → Créer**, utiliser :
 | Répertoire d'application | `tower-x` (le dossier parent du dépôt) |
 | Domaine | Le sous-domaine créé |
 | Chemin de l'URL | `/` |
-| Fichier de démarrage | `project/app.cjs` |
+| Fichier de démarrage | `towerx-start.cjs` |
 | Mode | Production |
 
 Arrêter l'application pendant sa préparation. Conserver la racine de l'application
@@ -112,8 +129,8 @@ Exécuter l'installation dans `tower-x/project`, où se trouve `package.json`, e
 non dans le dossier parent géré par N0C. Installer sur le serveur, sans copier
 les dépendances du Mac ni utiliser le bouton d'installation npm du dossier parent.
 
-Dans N0C, cliquer **Démarrer**. `app.cjs` charge `.env` et lance le serveur
-TypeScript dans le processus géré par Passenger. Le serveur fournit aussi le
+Dans N0C, cliquer **Démarrer**. `towerx-start.cjs` charge `project/app.cjs`, qui lit
+`project/.env` et lance le serveur TypeScript dans le processus géré par Passenger. Le serveur fournit aussi le
 front compilé. Les migrations sont appliquées par la commande précédente.
 Ne pas lancer en plus `npm start`, PM2 ou `npm run dev` pour cette même base.
 Passenger gère le port public : aucun accès public à `:3001` n'est nécessaire.
@@ -138,6 +155,12 @@ la connexion PostgreSQL et l'exécution des migrations. Une erreur WebSocket ou
 des joueurs invisibles entre eux demande aussi de contrôler le proxy et le nombre
 de processus avec PlanetHoster.
 
+Si toutes les adresses affichent « It works! NodeJS », c'est la page de démonstration
+de l'hébergeur. Vérifier que le fichier `towerx-start.cjs` dans le répertoire
+d'application contient bien `require('./project/app.cjs');`, que N0C a enregistré
+ce nom comme fichier de démarrage, et que l'application utilise la racine `/`
+du bon sous-domaine. Enregistrer puis arrêter et démarrer l'application.
+
 ## Mises à jour
 
 Sauvegarder PostgreSQL et arrêter l'application dans N0C, puis dans son
@@ -146,6 +169,7 @@ environnement SSH :
 ```bash
 cd ~/tower-x/project
 git pull --ff-only origin master
+cp ops/towerx-start.cjs ../towerx-start.cjs
 npm ci --include=dev
 npm run build
 npm run db:migrate
@@ -166,3 +190,6 @@ Cette préparation ne constitue pas un déploiement sur ton compte. Les réglage
 Passenger, le HTTPS et les connexions WebSocket doivent être validés sur la cible.
 Le lanceur a été vérifié localement avec PostgreSQL temporaire, le front compilé,
 deux joueurs WebSocket et une session conservée après arrêt puis redémarrage.
+Le démarrage via le lanceur à la racine a aussi été vérifié avec le chargeur Node.js
+officiel de Passenger 6.0.26 et une requête `/health` sur sa socket Unix. Ce test
+ne reproduit pas toute la configuration N0C/LiteSpeed du serveur cible.

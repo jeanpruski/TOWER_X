@@ -226,7 +226,8 @@ Observabilité locale :
 
 Voir le [guide de déploiement N0C](docs/deploiement-planethoster.md) pour le sous-domaine,
 PostgreSQL et les commandes d'installation. Avec l'arborescence du guide, le fichier
-de démarrage N0C est `project/app.cjs` ; la configuration est illustrée dans `ops/planethoster.env.example`.
+de démarrage N0C est `towerx-start.cjs`, à copier depuis `ops/` dans le dossier parent
+du dépôt. Il charge `project/app.cjs` ; la configuration est illustrée dans `ops/planethoster.env.example`.
 La cible doit permettre les WebSockets et un seul processus de jeu persistant.
 
 ## Production : Docker + HTTPS
