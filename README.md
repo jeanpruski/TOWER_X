@@ -222,6 +222,13 @@ Observabilité locale :
 - Journaux structurés Pino sur la sortie standard.
 - RTT visible dans le HUD, mesuré par ping applicatif toutes les 2,5 secondes.
 
+## Production : PlanetHoster The World
+
+Voir le [guide de déploiement N0C](docs/deploiement-planethoster.md) pour le sous-domaine,
+PostgreSQL et les commandes d'installation. Avec l'arborescence du guide, le fichier
+de démarrage N0C est `project/app.cjs` ; la configuration est illustrée dans `ops/planethoster.env.example`.
+La cible doit permettre les WebSockets et un seul processus de jeu persistant.
+
 ## Production : Docker + HTTPS
 
 Les fichiers de déploiement sont prêts ; aucun hébergement public n’est provisionné par ce dépôt.
