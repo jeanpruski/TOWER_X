@@ -16,8 +16,19 @@ test('landing, settings and responsive layout', async ({ page }) => {
   expect(errors).toEqual([]);
 });
 
-test('two browsers join, jump, keep their record and reconnect', async ({ browser }) => {
+for (const unavailableWebSocket of [false, true]) test(`two browsers join, jump, keep their record and reconnect${unavailableWebSocket ? ' with WebSocket unavailable' : ''}`, async ({ browser }) => {
   const first = await browser.newContext(), second = await browser.newContext();
+  if (unavailableWebSocket) for (const context of [first, second]) await context.addInitScript(() => {
+    const NativeWebSocket = window.WebSocket;
+    // Fail the real WebSocket connection while leaving HTTP polling available.
+    window.WebSocket = class extends NativeWebSocket {
+      constructor(url: string | URL, protocols?: string | string[]) {
+        const target = new URL(url, location.href);
+        if (target.pathname.startsWith('/socket.io/')) target.port = '1';
+        super(target.toString(), protocols);
+      }
+    };
+  });
   const a = await first.newPage(), b = await second.newPage(); const errors: string[] = [];
   a.on('pageerror', error => errors.push(error.message)); b.on('pageerror', error => errors.push(error.message));
   for (const page of [a, b]) { await page.goto('/'); await page.getByRole('button', { name: 'Jouer en invité', exact: true }).click(); await page.getByRole('button', { name: 'Commencer la partie', exact: true }).click(); await expect(page.getByText('VOUS ÊTES DANS LA TOUR')).toBeVisible(); await expect(page.locator('.game-canvas canvas')).toBeVisible(); }

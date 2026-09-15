@@ -210,6 +210,22 @@ de la base ni recompilation du front. Démarrer l'application dans N0C puis vér
 `/health`. Si un affichage temporaire des erreurs détaillées a été activé dans
 le `.htaccess` public, restaurer sa configuration de production après le diagnostic.
 
+### Connexion WebSocket refusée par le proxy
+
+Le client essaie WebSocket en premier, puis le transport HTTP de Socket.IO si
+l'ouverture échoue (`tryAllTransports: true`). La seule présence de `polling`
+dans la liste des transports n'active pas ce repli automatique.
+
+Sur la cible observée, la réponse WebSocket était `101 Switching Protocols`,
+mais avec `Connection: Keep-Alive` : le client refusait cette ouverture. Le repli
+HTTP a permis d'ouvrir la connexion et de recevoir le signal périodique du serveur.
+La correction du client se déploie avec `git pull` puis `npm run build` ; demander
+à l'hébergeur de corriger la transmission de l'en-tête `Connection: Upgrade`
+pour rétablir le transport WebSocket.
+Le test navigateur local couvre deux joueurs, le saut, le record et la reconnexion,
+avec puis sans WebSocket. Le contrôle public du transport ne constitue pas un
+playtest multijoueur sur l'hébergement.
+
 ## Mises à jour
 
 Sauvegarder PostgreSQL et arrêter l'application dans N0C, puis dans son
@@ -235,6 +251,7 @@ Ne pas forcer un `git pull` en cas de conflit : examiner les fichiers concernés
 - [Port géré par Passenger](https://www.phusionpassenger.com/docs/advanced_guides/in_depth/node/reverse_port_binding.html)
 - [Réglages des processus Passenger](https://www.phusionpassenger.com/docs/references/config_reference/apache/)
 - [Cibles binaires du client Prisma 6](https://docs.prisma.io/docs/orm/v6/reference/prisma-schema-reference#binarytargets-options)
+- [Repli entre transports Socket.IO](https://socket.io/docs/v4/client-options/#tryalltransports)
 
 Cette préparation ne constitue pas un déploiement sur ton compte. Les réglages
 Passenger, le HTTPS et les connexions WebSocket doivent être validés sur la cible.
