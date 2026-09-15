@@ -161,6 +161,33 @@ d'application contient bien `require('./project/app.cjs');`, que N0C a enregistr
 ce nom comme fichier de démarrage, et que l'application utilise la racine `/`
 du bon sous-domaine. Enregistrer puis arrêter et démarrer l'application.
 
+### Erreur Passenger sans journal accessible
+
+Si le jeu démarre en SSH mais Passenger affiche une erreur de démarrage, arrêter
+l'application dans N0C et installer temporairement le lanceur de diagnostic :
+
+```bash
+cd ~/tower-x/project
+git pull --ff-only origin master
+cp ops/towerx-diagnostic.cjs ../towerx-start.cjs
+```
+
+Garder `towerx-start.cjs` comme fichier de démarrage dans N0C. Démarrer
+l'application, ouvrir `/health`, puis lire le journal dans le terminal :
+
+```bash
+tail -n 80 ~/tower-x/towerx-startup.log
+```
+
+Ce fichier privé indique le lancement, la version Node et les erreurs JavaScript.
+Le lanceur masque `DATABASE_URL` et `SESSION_SECRET` dans le journal ; il ne publie
+pas de page de diagnostic. Si aucun fichier n'apparaît, le lanceur n'a pas été
+exécuté ou le journal n'a pas pu être écrit : consulter les journaux Passenger de
+l'hébergeur et vérifier le fichier de démarrage réellement utilisé.
+
+Après résolution, arrêter l'application, restaurer le lanceur normal avec
+`cp ops/towerx-start.cjs ../towerx-start.cjs` depuis le dépôt, puis redémarrer.
+
 ## Mises à jour
 
 Sauvegarder PostgreSQL et arrêter l'application dans N0C, puis dans son
@@ -193,3 +220,6 @@ deux joueurs WebSocket et une session conservée après arrêt puis redémarrage
 Le démarrage via le lanceur à la racine a aussi été vérifié avec le chargeur Node.js
 officiel de Passenger 6.0.26 et une requête `/health` sur sa socket Unix. Ce test
 ne reproduit pas toute la configuration N0C/LiteSpeed du serveur cible.
+Le lanceur de diagnostic a passé le même contrôle Passenger. Les essais de panne
+vérifient aussi la journalisation d'un fichier manquant et d'un échec de démarrage,
+le masquage des secrets de configuration et les permissions privées du journal.
