@@ -277,6 +277,64 @@ Ce test utilise des navigateurs automatisés et un serveur local, sans proxy
 PlanetHoster ni déploiement de cette version sur le compte. Aucun gain de ping
 Internet ni résultat de playtest humain n'est mesuré ici.
 
+## Lissage des personnages distants du 16 septembre 2026
+
+Après déploiement du mode HTTP, l'utilisateur signale une nette amélioration du
+lag et des saccades, sans pouvoir localiser précisément les petits à-coups restants.
+L'analyse trouve un défaut reproductible du rendu distant : son retard fixe de
+100 ms ne couvre pas les intervalles entre réponses HTTP. Il alterne alors une
+position figée et un rattrapage à la réception suivante.
+
+Le nouveau rendu suit les ticks serveur avec un tampon cible adaptatif de 100 à
+250 ms et une horloge qui ne recule pas. La simulation, les commandes du joueur
+local et sa caméra ne sont pas modifiées. Les téléportations horizontales sont
+aussi exclues du lissage ; les effets et états d'atterrissage suivent le rendu.
+
+Le test déterministe de `client-network.test.ts` reçoit une position toutes les
+200 ms pour un partenaire qui avance à 20 px/s. Sur 240 intervalles de rendu à
+60 Hz, après deux secondes d'amorçage :
+
+| Mesure de la position interpolée, avant arrondi pixel art | Avant | Après |
+| --- | ---: | ---: |
+| Intervalles sans déplacement | 100 / 240 | 0 / 240 |
+| Plus grand déplacement entre deux images | 2 px | 0,334 px |
+
+Le nouveau scénario Chrome `remote walking stays smooth with delayed N0C polling`
+utilise un monde temporaire, un client de test qui marche à 108 px/s et un
+navigateur observateur avec 150–230 ms de délai HTTP injecté. Il relève les positions
+à chaque animation pendant huit secondes, après 2,5 secondes d'amorçage. Les
+demi-tours et intervalles de rendu hors de 8–40 ms sont exclus des mesures de marche.
+La version déployée (`7bd1179`) a été exécutée avec ce même test pour comparaison :
+
+| Mesure Chrome | Version déployée | Nouveau rendu, contrôle final |
+| --- | ---: | ---: |
+| Intervalles de marche figés | 113 / 324 (34,9 %) | 0 / 332 (0 %) |
+| Vitesse visuelle maximale entre deux images | 857,6 px/s | 115,3 px/s |
+| Plus grand intervalle entre relevés | 23,5 ms | 23,3 ms |
+
+La compilation et les 109 tests unitaires/intégration passent. Ils couvrent aussi
+les paquets groupés, l'ordre des snapshots, les coupures longues, le retour à un
+petit tampon sur connexion rapide et le chargement tardif du rendu. Les tests
+navigateur couvrent les compagnons, les poussées, la courte échelle, deux joueurs,
+les reconnexions et les sauts avec délai.
+
+Des passages intermédiaires des tests de sauts ont dépassé leurs seuils : une
+ancienneté de snapshot de 422 ms en WebSocket et des corrections physiques de
+46,3–46,8 px en HTTP. Aucune correction n'a franchi le seuil de téléportation.
+Les seuils des tests n'ont pas été élargis ; ces observations restent des limites
+de cette validation sous délai et ne prouvent pas leur cause. Le contrôle final
+complet réussit ses dix scénarios navigateur : en N0C, il mesure au maximum
+20 commandes non confirmées, 230 ms d'ancienneté du snapshot et 27,8 px de correction
+physique, sans correction franchissant le seuil de téléportation. Les deux autres
+passages de la marche distante ont relevé 0 / 318 et 1 / 347 intervalles figés.
+
+Ces essais locaux ne mesurent pas le ping de PlanetHoster et ne remplacent pas
+un playtest humain. Le gain concerne la continuité des autres personnages ; il
+ne garantit pas la disparition de toutes les saccades du navigateur. Le tampon
+peut ajouter jusqu'à 150 ms au délai visuel cible des personnages distants, ce
+qui reste à évaluer pour la coopération sur l'hébergement. Cette amélioration
+n'est pas déployée par cette validation.
+
 ## Points encore à éprouver
 
 - Playtests humains à 1, 2, 5, 10 et 20+ : rythme, timing des navettes, délai des dalles, lisibilité des tremplins, compréhension des courtes échelles, disponibilité des aides pour plusieurs retardataires, wall-jump, poussée, frustration et lisibilité des foules.

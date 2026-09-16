@@ -5,6 +5,7 @@ import { InputController, type Settings } from './input';
 import { GameAudio } from './audio';
 import { CHUNK_HEIGHT, POWER_UPS, RARE_COSMETICS, type Relic, type Pickup, type GameEffect } from '@tower/shared';
 import type { VisualEffect, MotionStamp } from './presentation';
+import { RemoteTimeline } from './remote-timeline';
 
 export interface GameState { unlockedCount: number; connected: boolean; reconnecting: boolean; player: NetworkPlayer | null; online: number; botCount: number; feedback: string; routeName: string; coopHint: string; standings: NearbyStandings | null; frontier: number; ping: number; tick: number; tickMs: number; activeChunks: number; worldSeed: number; feed: FeedEntry[]; gamepad: boolean; notice: string; }
 export const initialGameState: GameState = { unlockedCount: 0, connected: false, reconnecting: false, player: null, online: 0, botCount: 0, feedback: '', routeName: '', coopHint: '', standings: null, frontier: 0, ping: 0, tick: 0, tickMs: 0, activeChunks: 0, worldSeed: 0, feed: [], gamepad: false, notice: '' };
@@ -22,9 +23,10 @@ export class GameClient {
   private resetPosition = false;
   private correction = { x: 0, y: 0 }; private feedbackUntil = 0;
   private snapshots: { at: number; data: Snapshot }[] = [];
+  private remoteTimeline = new RemoteTimeline();
   private pending: PlayerInput[] = []; private sequence = 0; private accumulator = 0; private uiClock = 0;
   private correctionCount = 0; private maxCorrection = 0; private hardCorrections = 0;
-  get networkStats() { return { transport: this.socket.io.engine?.transport.name ?? 'disconnected', pending: this.pending.length, correctionCount: this.correctionCount, maxCorrection: this.maxCorrection, hardCorrections: this.hardCorrections, snapshotAge: this.snapshots.length ? performance.now() - this.snapshots.at(-1)!.at : 0 }; }
+  get networkStats() { return { transport: this.socket.io.engine?.transport.name ?? 'disconnected', pending: this.pending.length, correctionCount: this.correctionCount, maxCorrection: this.maxCorrection, hardCorrections: this.hardCorrections, snapshotAge: this.snapshots.length ? performance.now() - this.snapshots.at(-1)!.at : 0, interpolationDelay: this.remoteTimeline.delay }; }
   private pingTimer: ReturnType<typeof setInterval>; private onChange: (state: GameState) => void;
   constructor(settings: Settings, onChange: (state: GameState) => void, onMenu: () => void, onProfile: (profile: PublicProfile) => void, entry: EntryChoice = { mode: 'saved' }, onEntryRejected: (message: string) => void = () => {}) {
     this.onChange = onChange; this.input = new InputController(settings, onMenu); this.audio = new GameAudio(settings);
@@ -38,6 +40,7 @@ export class GameClient {
       if (data.v !== 1) return;
       joined = true;
       this.playerId = data.playerId; this.local = { ...data.player }; this.sequence = 0; this.pending = []; this.snapshots = [];
+      this.remoteTimeline.reset();
       this.accumulator = 0; this.cameraReady = false;
       this.predictionTick = data.tick ?? 0; this.crumbling = []; this.chunks.clear();
       this.correctionCount = 0; this.maxCorrection = 0; this.hardCorrections = 0;
@@ -80,7 +83,7 @@ export class GameClient {
   private receiveEffect(data: GameEffect) {
     if (data.v !== 1) return;
     const own = data.actorId === this.playerId;
-    this.effects.push({ data, at: performance.now() + (own ? 0 : 100) });
+    this.effects.push({ data, at: performance.now() + (own ? 0 : this.remoteTimeline.delay) });
     this.effects = this.effects.slice(-64);
     if (data.kind === 'pickup') {
       if (own) { this.state.feedback = `${POWER_UPS[data.powerUp].name} ${data.powerUp === 'boots' ? 'récupérées' : 'récupérée'} !`; this.feedbackUntil = performance.now() + 2400; this.audio.pickup(); }
@@ -102,7 +105,9 @@ export class GameClient {
   }
   private reconcile(snapshot: Snapshot) {
     if (snapshot.v !== 1 || snapshot.tick <= (this.snapshots.at(-1)?.data.tick ?? -1)) return;
-    this.snapshots.push({ at: performance.now(), data: snapshot }); if (this.snapshots.length > 12) this.snapshots.shift();
+    const at = performance.now();
+    this.remoteTimeline.receive(snapshot.tick, at);
+    this.snapshots.push({ at, data: snapshot }); if (this.snapshots.length > 12) this.snapshots.shift();
     this.bridges = snapshot.bridges ?? [];
     this.crumbling = snapshot.crumbling ?? [];
     this.predictionTick = snapshot.tick;
@@ -175,21 +180,21 @@ export class GameClient {
     return { ...this.local, x: previous.x + (this.local.x - previous.x) * alpha + this.correction.x, y: previous.y + (this.local.y - previous.y) * alpha + this.correction.y };
   }
   renderPlayers(): NetworkPlayer[] {
-    const target = performance.now() - 100;
-    const before = [...this.snapshots].reverse().find(s => s.at <= target) ?? this.snapshots[0];
-    const after = this.snapshots.find(s => s.at >= target) ?? this.snapshots.at(-1);
+    const now = performance.now(), target = this.remoteTimeline.sample(now);
+    const before = [...this.snapshots].reverse().find(s => s.data.tick <= target) ?? this.snapshots[0];
+    const after = this.snapshots.find(s => s.data.tick >= target) ?? this.snapshots.at(-1);
     const others: NetworkPlayer[] = [];
     if (before && after) {
-      const alpha = before === after ? 0 : Math.max(0, Math.min(1, (target - before.at) / (after.at - before.at)));
+      const alpha = before === after ? 0 : Math.max(0, Math.min(1, (target - before.data.tick) / (after.data.tick - before.data.tick)));
       for (const p of after.data.players) {
         if (p.id === this.playerId) continue;
         const previous = before.data.players.find(b => b.id === p.id) ?? p;
-        const teleport = Math.abs(p.y - previous.y) > 100;
-        others.push({ ...p, x: teleport ? p.x : previous.x + (p.x - previous.x) * alpha, y: teleport ? p.y : previous.y + (p.y - previous.y) * alpha });
+        const teleport = Math.abs(p.y - previous.y) > 100 || Math.abs(p.x - previous.x) > 100;
+        others.push({ ...p, grounded: !teleport && alpha < 1 ? previous.grounded : p.grounded, x: teleport ? p.x : previous.x + (p.x - previous.x) * alpha, y: teleport ? p.y : previous.y + (p.y - previous.y) * alpha });
       }
     }
     const local = this.renderLocal(); if (local) others.push(local);
-    const now = performance.now(), visible = new Set(others.map(p => p.id));
+    const visible = new Set(others.map(p => p.id));
     for (const id of this.motion.keys()) if (!visible.has(id)) this.motion.delete(id);
     for (const p of others) {
       const previous = this.motion.get(p.id);

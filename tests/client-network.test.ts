@@ -36,10 +36,10 @@ beforeEach(() => {
     profile: { ...player, isGuest: true, createdAt: '', unlockedCosmetics: [], shoes: 'classic', shoeColor: '#c6ed80', hatColor: null } };
   network.handlers.get('welcome')!(welcome);
 });
-afterEach(() => { client.destroy(); vi.useRealTimers(); });
+afterEach(() => { client.destroy(); vi.useRealTimers(); vi.restoreAllMocks(); });
 const chunks = () => network.handlers.get('chunks')!({ v: 1, chunks: [generateChunk(42, 0), generateChunk(42, 1)] });
-const snapshot = (tick: number, own = player) => network.handlers.get('snapshot')!({
-  v: 1, tick, serverTime: Date.now(), players: [own], playerCount: 1, botCount: 0,
+const snapshot = (tick: number, own = player, others: NetworkPlayer[] = []) => network.handlers.get('snapshot')!({
+  v: 1, tick, serverTime: Date.now(), players: [own, ...others], playerCount: 1 + others.length, botCount: 0,
   pickups: [], relics: [], bridges: [], crumbling: [], frontier: 0, frontRunnerId: own.id, tickMs: 1, activeChunks: 2,
   standings: { above: [], below: [], self: { id: own.id, displayName: 'Mage', color: '#c6ed80', rank: 1, height: 0, delta: 0 } },
 } satisfies Snapshot);
@@ -81,4 +81,36 @@ it('does not display a ping timeout as a successful 2500 ms measurement', () => 
   const ping = network.sent.find(p => p.event === 'ping')!;
   vi.advanceTimersByTime(2500); ping.data(new Error('timeout'));
   expect(client.state.ping).toBe(0);
+});
+
+it('keeps a steadily moving remote player smooth when HTTP delivers a snapshot every 200 ms', () => {
+  let now = 0;
+  vi.spyOn(performance, 'now').mockImplementation(() => now);
+  const positions: number[] = [];
+  for (let frame = 0; frame <= 360; frame++) {
+    now = frame * 1000 / 60;
+    if (frame % 12 === 0) snapshot(1200 + frame / 2, player, [{ ...player, id: 'partner', x: 40 + now * 0.02, vx: 20 }]);
+    const partner = client.renderPlayers().find(p => p.id === 'partner')!;
+    if (frame >= 120) positions.push(partner.x);
+  }
+  const steps = positions.slice(1).map((x, i) => x - positions[i]!);
+  const frozen = steps.filter(dx => dx < 0.001).length;
+  const maxStep = Math.max(...steps);
+  console.log('Remote HTTP replay:', JSON.stringify({ frames: steps.length, frozen, maxStep }));
+  expect(frozen).toBeLessThan(steps.length * 0.05);
+  expect(maxStep).toBeLessThan(0.5); // 20 px/s at 60 FPS, allowing gentle clock adjustments.
+  expect(positions.at(-1)! - positions[0]!).toBeGreaterThan(75);
+});
+
+it('does not draw a remote teleport as a slide through the tower', () => {
+  let now = 0;
+  vi.spyOn(performance, 'now').mockImplementation(() => now);
+  snapshot(1200, player, [{ ...player, id: 'partner', x: 30, y: 0 }]);
+  client.renderPlayers(); now = 200;
+  snapshot(1206, player, [{ ...player, id: 'partner', x: 250, y: 0 }]);
+  expect(client.renderPlayers().find(p => p.id === 'partner')!.x).toBe(250);
+  now = 400;
+  snapshot(1212, player, [{ ...player, id: 'partner', x: 250, y: 500 }]);
+  now = 600;
+  expect(client.renderPlayers().find(p => p.id === 'partner')!.y).toBe(500);
 });

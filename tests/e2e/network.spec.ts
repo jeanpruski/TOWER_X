@@ -1,4 +1,6 @@
 import { test, expect } from '@playwright/test';
+import { io } from 'socket.io-client';
+import { neutralInput, type Snapshot, type Welcome } from '@tower/shared';
 
 test.afterEach(async ({ page }) => { await page.unrouteAll({ behavior: 'ignoreErrors' }); });
 
@@ -77,4 +79,68 @@ for (const mode of ['polling', 'websocket', 'n0c']) test(`${mode} with 150–230
   expect(metrics.hardCorrections).toBe(0);
   if (mode === 'n0c') expect(webSockets).toEqual([]);
   await page.getByRole('button', { name: 'Quitter la tour', exact: true }).click();
+});
+
+test('remote walking stays smooth with delayed N0C polling', async ({ page }) => {
+  let requests = 0;
+  await page.route('**/socket.io/**', async route => {
+    const jitter = requests++ % 5 === 0 ? 40 : 0;
+    await new Promise(resolve => setTimeout(resolve, 75 + jitter));
+    const response = await route.fetch();
+    await new Promise(resolve => setTimeout(resolve, 75 + jitter));
+    await route.fulfill({ response });
+  });
+  await page.goto('http://localhost:5187/');
+  await page.getByRole('button', { name: 'Jouer en invité', exact: true }).click();
+  await page.getByRole('button', { name: 'Commencer la partie', exact: true }).click();
+  await expect(page.getByText('VOUS ÊTES DANS LA TOUR')).toBeVisible();
+  const response = await page.request.post('http://127.0.0.1:3107/api/auth/guest', { data: {} });
+  expect(response.ok()).toBe(true);
+  const socket = io('http://127.0.0.1:3107', { transports: ['polling'], extraHeaders: { cookie: response.headers()['set-cookie']!.split(';')[0]! }, forceNew: true, reconnection: false });
+  let timer: ReturnType<typeof setInterval> | undefined;
+  try {
+    const welcome = await new Promise<Welcome>((resolve, reject) => {
+      socket.once('connect', () => socket.emit('join', { v: 1 }));
+      socket.once('welcome', resolve); socket.once('connect_error', reject);
+    });
+    let direction = 1, sequence = 0;
+    socket.on('snapshot', (snapshot: Snapshot) => {
+      const player = snapshot.players.find(p => p.id === welcome.playerId);
+      if (player && player.x > 250) direction = -1;
+      if (player && player.x < 70) direction = 1;
+    });
+    timer = setInterval(() => socket.emit('input', { ...neutralInput(sequence++), moveX: direction }), 1000 / 30);
+    await expect.poll(() => page.evaluate(id => window.towerDebug!.inspect().players.some(p => p.id === id), welcome.playerId)).toBe(true);
+    await page.waitForTimeout(2500);
+    const readings = await page.evaluate(id => new Promise<{ at: number; x: number; vx: number; delay: number }[]>(resolve => {
+      const samples: { at: number; x: number; vx: number; delay: number }[] = [];
+      const start = performance.now();
+      const sample = () => {
+        const { players, network } = window.towerDebug!.inspect();
+        const player = players.find(p => p.id === id)!;
+        samples.push({ at: performance.now(), x: player.x, vx: player.vx, delay: network.interpolationDelay });
+        if (performance.now() - start >= 8000) resolve(samples);
+        else requestAnimationFrame(sample);
+      };
+      requestAnimationFrame(sample);
+    }), welcome.playerId);
+    const steps = readings.slice(1).map((p, i) => ({ dx: p.x - readings[i]!.x, dt: p.at - readings[i]!.at, p, previous: readings[i]! }));
+    // Ignore actual turns and long browser scheduling gaps when measuring movement.
+    const moving = steps.filter(s => s.p.x > 90 && s.p.x < 230 && Math.abs(s.p.vx) > 90 && s.p.vx === s.previous.vx && s.dt >= 8 && s.dt < 40);
+    const metrics = {
+      movingFrames: moving.length,
+      frozenFrames: moving.filter(s => Math.abs(s.dx) < 0.01).length,
+      maxSpeed: Math.max(...moving.map(s => Math.abs(s.dx) / s.dt * 1000)),
+      maxFrameGap: Math.max(...steps.map(s => s.dt)),
+      interpolationDelay: readings.at(-1)!.delay,
+    };
+    console.log('Remote delayed N0C:', JSON.stringify(metrics));
+    await test.info().attach('remote-network-metrics', { body: JSON.stringify({ metrics, readings }, null, 2), contentType: 'application/json' });
+    expect(metrics.movingFrames).toBeGreaterThan(100);
+    expect(metrics.frozenFrames / metrics.movingFrames).toBeLessThan(0.1);
+    expect(metrics.maxSpeed).toBeLessThan(180); // Walking is 108 px/s; no packet-sized leaps.
+    await page.getByRole('button', { name: 'Quitter la tour', exact: true }).click();
+  } finally {
+    clearInterval(timer); socket.disconnect();
+  }
 });

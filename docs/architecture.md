@@ -96,13 +96,27 @@ Le serveur :
 5. Résout plateformes, joueurs, impacts et poussées ; calcule record et camp.
 6. Prépare les snapshots à 15 Hz avec le numéro de la dernière entrée consommée. Chaque connexion ne garde qu’un snapshot récent en attente : le suivant remplace le précédent. Le hook `ready` du transport Engine.IO le joint au prochain long-poll HTTP, avant la vidange des événements fiables. Il est réattaché lors du passage en WebSocket et retiré à la déconnexion ; aucune file illimitée de positions n’est créée.
 
-Le client rejoue les entrées non confirmées à partir de la position autoritaire. Les autres personnages interpolent les snapshots avec 100 ms de retard. La prédiction locale ne simule pas les collisions avec les joueurs distants : le serveur corrige ces interactions. Il faut régler le ressenti avec de la latence réelle.
+Le client rejoue les entrées non confirmées à partir de la position autoritaire.
+Les autres personnages interpolent les snapshots selon leurs ticks serveur.
+`RemoteTimeline` adapte son tampon cible entre 100 et 250 ms au plus grand des
+huit derniers intervalles de réception et de simulation couverts, avec un tick
+de marge. Cela évite les alternances arrêt/rattrapage lorsque HTTP livre moins
+de snapshots que les 15 Hz préparés côté serveur. Une horloge de lecture avance
+sans reculer ; sa vitesse varie de ±15 % pour absorber le jitter et les changements
+de tampon. Elle s'arrête au dernier état reçu, sans extrapolation à travers les
+obstacles. Une coupure de plus d'une seconde ou une reconnexion réinitialise la
+vue ; les grandes téléportations verticales et horizontales ne sont pas interpolées.
+La prédiction locale ne simule pas les collisions avec les joueurs distants :
+le serveur corrige ces interactions. Ce tampon concerne uniquement leur rendu,
+sans retarder les commandes ou la caméra du joueur local. Il peut ajouter jusqu'à
+150 ms de délai visuel cible sur une connexion irrégulière ; les interactions
+coopératives restent à éprouver avec de la latence réelle.
 
 Le rendu local interpole les deux positions simulées et amortit les petites corrections, sans modifier la position physique. La caméra suit cette même position lissée. Une téléportation réinitialise ce lissage. Le client attend la géométrie initiale avant de simuler ; `welcome.tick` synchronise les plateformes animées dès l’arrivée. Un snapshot plus ancien est ignoré et le retour au camp efface les commandes prédites. Les appuis clavier/tactiles sur saut et poussée sont mémorisés jusqu’à un échantillonnage : une pression de moins de 33 ms ne disparaît plus entre deux ticks. Le blur et les menus vident ce tampon.
 
 Les records sont calculés chaque tick et figurent dans les snapshots. Le paquet de profil complet lié aux records est regroupé à 2 Hz, pour éviter d’encombrer le transport pendant chaque saut. Les changements de tenue, camps et trouvailles gardent leurs notifications immédiates. Un ping expiré affiche « — » ; le panneau de debug indique le transport et le nombre de commandes non confirmées.
 
-Les événements `effect` sont fiables et limités à la zone d’intérêt, contrairement aux snapshots volatiles. Une poussée décrit l’acteur, sa direction et les cibles réellement touchées, avec un drapeau d’absorption par bulle. Une tentative valide dans le vide produit un geste et un message distinct. Les effets distants suivent les 100 ms d’interpolation ; les effets locaux sont immédiats à la réception. Le HUD de recharge et le cadre de portée utilisent les mêmes constantes que le serveur. Aucun effet visuel ne décide du résultat physique.
+Les événements `effect` sont fiables et limités à la zone d’intérêt, contrairement aux snapshots volatiles. Une poussée décrit l’acteur, sa direction et les cibles réellement touchées, avec un drapeau d’absorption par bulle. Une tentative valide dans le vide produit un geste et un message distinct. Les effets distants suivent le délai d’interpolation adaptatif ; les effets locaux sont immédiats à la réception. Les atterrissages distants suivent l’état au sol au tick affiché. Le HUD de recharge et le cadre de portée utilisent les mêmes constantes que le serveur. Aucun effet visuel ne décide du résultat physique.
 
 La zone d’intérêt couvre ±2 chunks pour la géométrie et ±3 pour les autres joueurs. Le cache des chunks est purgé toutes les cinq secondes. Une téléportation de debug nécessite `DEV_TOOLS=1` et est systématiquement désactivée en production.
 
