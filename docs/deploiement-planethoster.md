@@ -226,6 +226,25 @@ Le test navigateur local couvre deux joueurs, le saut, le record et la reconnexi
 avec puis sans WebSocket. Le contrôle public du transport ne constitue pas un
 playtest multijoueur sur l'hébergement.
 
+Contrôle du 16 septembre 2026 : le proxy renvoie toujours `Connection: Keep-Alive`
+sur la réponse HTTP/1.1 `101`, et aucun paquet Engine.IO n'arrive pendant les quatre
+secondes d'observation. Les corrections de gestion des files et d'envoi des positions
+améliorent le mode HTTP, mais ne réparent pas ce tunnel au niveau de l'hébergeur.
+Le bouton debug du jeu affiche le transport réellement utilisé (`polling` ou `websocket`).
+
+Message prêt à transmettre au support :
+
+> Bonjour, sur towerx.prjski.com, application N0C Node 22 « towerx-api »,
+> l'ouverture de `wss://towerx.prjski.com/socket.io/?EIO=4&transport=websocket`
+> renvoie HTTP 101 avec `Upgrade: websocket`, mais `Connection: Keep-Alive`
+> au lieu de `Connection: Upgrade`. Le navigateur refuse la connexion et le jeu
+> bascule en HTTP polling, avec de la latence. Pouvez-vous vérifier le proxy
+> LiteSpeed/Passenger et le tunnel WebSocket bidirectionnel sur `/socket.io/`,
+> y compris la réception du paquet d'ouverture Engine.IO et les ping/pong ?
+> Le jeu doit rester sur un seul processus Node persistant.
+
+Référence du support : [proxy WebSocket Node automatique de LiteSpeed](https://docs.litespeedtech.com/lsws/cp/cpanel/cloudlinux/#nodejs-automatic-websocket-proxy).
+
 ## Mises à jour
 
 Sauvegarder PostgreSQL et arrêter l'application dans N0C, puis dans son

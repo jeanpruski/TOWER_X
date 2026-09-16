@@ -334,6 +334,37 @@ describe('authoritative multiplayer world', () => {
     await delay(220); const p = server.world.players.get(a.welcome.playerId)!;
     expect(p.body.y).toBe(0); expect(p.profile.personalBest).toBe(0); expect(p.body.x - a.welcome.player.x).toBeLessThan(35); expect(server.world.rejectedInputs).toBeGreaterThan(0);
   });
+  it('uses fresh movement after a burst, keeps short jumps and recovers across sequence gaps', async () => {
+    const a = await connect((await guest()).cookie);
+    server.world.stop();
+    const p = server.world.players.get(a.welcome.playerId)!, x = p.body.x;
+    for (let seq = 0; seq < 18; seq++) a.socket.emit('input', { ...neutralInput(seq), moveX: 1 });
+    a.socket.emit('input', { ...neutralInput(18), moveX: 1, jump: true, push: true });
+    for (let seq = 19; seq < 29; seq++) a.socket.emit('input', neutralInput(seq));
+    await delay(40);
+    server.world.step(); // Fresh held movement, not 18 stale frames.
+    expect(p.body.x - x).toBeLessThanOrEqual(108 / 30);
+    server.world.step(); // The one-frame press survives coalescing.
+    expect(p.body.y).toBeGreaterThan(0); expect(p.body.jumpHeld).toBe(true);
+    server.world.step();
+    expect(p.ack).toBe(28); expect(p.body.jumpHeld).toBe(false);
+    // An expired/flooded stream used to lock permanently once this gap exceeded 200.
+    a.socket.emit('input', neutralInput(1000)); await delay(25); server.world.step();
+    expect(p.ack).toBe(1000);
+    a.socket.emit('input', { ...neutralInput(999), moveX: -1 }); await delay(25); server.world.step();
+    expect(p.ack).toBe(1000); expect(server.world.rejectedInputs).toBe(1);
+  });
+  it('acknowledges queued controls discarded on respawn', async () => {
+    const a = await connect((await guest()).cookie);
+    server.world.stop();
+    const p = server.world.players.get(a.welcome.playerId)!;
+    a.socket.emit('input', { ...neutralInput(0), jump: true });
+    a.socket.emit('input', neutralInput(1));
+    const returned = new Promise(resolve => a.socket.once('notice', resolve));
+    a.socket.emit('respawn', { v: 1 }); await returned;
+    expect(p.ack).toBe(1); expect(p.queue).toHaveLength(0);
+    server.world.step(); expect(p.body.y).toBe(0);
+  });
   it('activates camps only after a real landing, respawns there and preserves PB on reconnect', async () => {
     const g = await guest(), a = await connect(g.cookie), p = server.world.players.get(a.welcome.playerId)!;
     p.body.x = 160; p.body.y = 1082; p.body.vy = -100; p.body.grounded = false; p.body.protection = 0;

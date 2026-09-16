@@ -117,7 +117,7 @@ export interface Snapshot {
   crumbling: CrumbleState[];
   frontier: number; frontRunnerId: string | null; tickMs: number; activeChunks: number;
 }
-export interface Welcome { v: 1; playerId: string; worldSeed: number; worldVersion: number; tickRate: number; profile: PublicProfile; player: NetworkPlayer; }
+export interface Welcome { v: 1; tick?: number; playerId: string; worldSeed: number; worldVersion: number; tickRate: number; profile: PublicProfile; player: NetworkPlayer; }
 export interface FeedEntry { id: string; text: string; kind: 'join' | 'camp' | 'record'; time: number; }
 export interface WorldStatus { online: number; frontier: number; worldSeed: number; uptime: number; }
 export type JoinablePlayer = Pick<PublicProfile, 'id' | 'displayName' | 'color' | 'mask' | 'hat' | 'shoes' | 'shoeColor' | 'hatColor'> & { height: number };

@@ -42,6 +42,12 @@ for (const unavailableWebSocket of [false, true]) test(`two browsers join, jump,
   await expect(a.locator('.stat-row').filter({ hasText: 'Record personnel' }).locator('strong')).toHaveText(record);
   await a.setViewportSize({ width: 390, height: 844 }); await a.screenshot({ path: 'test-results/game-mobile.png', fullPage: true });
   expect(await a.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true); expect(errors).toEqual([]);
+  // Close the Socket.IO session explicitly; abandoning a polling tab otherwise
+  // leaves its player online until heartbeat expiry, contaminating the next test.
+  await a.getByRole('button', { name: 'Quitter la tour', exact: true }).click();
+  await expect(b.getByText('1 MAGE EN LIGNE')).toBeVisible();
+  await b.getByRole('button', { name: 'Quitter la tour', exact: true }).click();
+  await expect.poll(async () => (await (await b.request.get('http://localhost:5181/api/world')).json()).online).toBe(0);
   await first.close(); await second.close();
 });
 

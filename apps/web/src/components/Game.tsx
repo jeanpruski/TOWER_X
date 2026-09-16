@@ -9,7 +9,7 @@ import { Modal } from './Modal';
 import { NearbyPlayers } from './NearbyPlayers';
 import { ActionHud } from './ActionHud';
 
-declare global { interface Window { towerDebug?: { teleportToChunk: (chunkIndex: number) => void; inspect: () => { player: NetworkPlayer | null; players: NetworkPlayer[]; pickups: Pickup[]; relics: Relic[]; bridges: Platform[]; chunks: Chunk[]; platforms: Platform[]; crumbling: CrumbleState[]; tick: number } }; } }
+declare global { interface Window { towerDebug?: { teleportToChunk: (chunkIndex: number) => void; inspect: () => { network: GameClient['networkStats']; player: NetworkPlayer | null; players: NetworkPlayer[]; pickups: Pickup[]; relics: Relic[]; bridges: Platform[]; chunks: Chunk[]; platforms: Platform[]; crumbling: CrumbleState[]; tick: number } }; } }
 
 export function Game({ settings, onProfile, onExit, onSettings, onAccount, entry, onEntryRejected, paused }: { settings: Settings; onProfile: (p: PublicProfile) => void; onExit: () => void; onSettings: () => void; onAccount: () => void; entry: EntryChoice; onEntryRejected: (message: string) => void; paused: boolean }) {
   const mount = useRef<HTMLDivElement>(null), container = useRef<HTMLDivElement>(null), client = useRef<GameClient | null>(null);
@@ -21,7 +21,7 @@ export function Game({ settings, onProfile, onExit, onSettings, onAccount, entry
     let destroyed = false; let game: { destroy: (remove: boolean) => void } | undefined;
     const connection = new GameClient(settings, setState, () => { if (!externalModal.current) setMenu(value => !value); }, p => callbacks.current.onProfile(p), entry, message => callbacks.current.onEntryRejected(message));
     client.current = connection;
-    const debugCommands = { teleportToChunk: (chunkIndex: number) => connection.socket.emit('devTeleport', { v: 1, chunkIndex }), inspect: () => ({ player: connection.local, players: connection.renderPlayers(), pickups: connection.pickups, relics: connection.relics, bridges: connection.bridges, chunks: [...connection.chunks.values()], platforms: connection.renderPlatforms(), crumbling: connection.crumbling, tick: connection.renderTick }) };
+    const debugCommands = { teleportToChunk: (chunkIndex: number) => connection.socket.emit('devTeleport', { v: 1, chunkIndex }), inspect: () => ({ network: connection.networkStats, player: connection.local, players: connection.renderPlayers(), pickups: connection.pickups, relics: connection.relics, bridges: connection.bridges, chunks: [...connection.chunks.values()], platforms: connection.renderPlatforms(), crumbling: connection.crumbling, tick: connection.renderTick }) };
     if (import.meta.env.DEV) window.towerDebug = debugCommands;
     void import('../game/scene').then(({ mountGame }) => {
       if (destroyed || !mount.current) return;
@@ -49,14 +49,14 @@ export function Game({ settings, onProfile, onExit, onSettings, onAccount, entry
     <header className="game-header"><button className="text-button" onClick={onExit}><ArrowLeft size={17}/> Quitter la tour</button><span className="game-wordmark">TOWER <b>X</b></span><button className="icon-button" aria-label="Menu du jeu" onClick={() => setMenu(true)}><Settings2 size={19}/></button></header>
     <div className="game-layout">
       <section className="game-main">
-        <div className="game-topline"><div><span className="live-dot"/> {state.connected ? 'VOUS ÊTES DANS LA TOUR' : 'CONNEXION AU MONDE…'}</div><span><Wifi size={13}/> {state.ping} ms <i/> {state.gamepad ? 'MANETTE' : 'CLAVIER'}</span></div>
+        <div className="game-topline"><div><span className="live-dot"/> {state.connected ? 'VOUS ÊTES DANS LA TOUR' : 'CONNEXION AU MONDE…'}</div><span><Wifi size={13}/> {state.ping > 0 ? `${state.ping} ms` : '—'} <i/> {state.gamepad ? 'MANETTE' : 'CLAVIER'}</span></div>
         <div className={`game-frame ${settings.crt ? 'crt' : ''} ${settings.curvedScreen ? 'curved' : ''}`}>
           <ActionHud player={player} settings={settings} feedback={state.feedback} connected={state.connected} gamepad={state.gamepad}/>
           <div className="game-viewport">
           <div className="game-canvas" ref={mount} tabIndex={0} aria-label="Jeu TOWER X : utilisez les flèches pour bouger et Espace pour sauter."/>
           <div className="canvas-label" data-biome={biome.id}><span>{String(BIOMES.indexOf(biome) + 1).padStart(2, '0')} / {biome.name.toLocaleUpperCase('fr')}</span><button aria-label="Plein écran" onClick={() => { if (document.fullscreenElement) void document.exitFullscreen(); else void container.current?.requestFullscreen().catch(() => setError('Le plein écran n’est pas disponible dans ce navigateur.')); }}><Maximize2 size={16}/></button></div>
           {(!state.connected || loading || error) && <div className="connection-overlay"><div className="spinner"/><strong>{error || (state.reconnecting ? 'On vous retrouve…' : 'La tour s’éveille…')}</strong><span>{state.notice || 'Préparation de votre arrivée au camp.'}</span>{!state.reconnecting && state.notice && <button className="button primary" onClick={onExit}>Retour à l’accueil</button>}</div>}
-          {debug && <div className="debug-overlay">seed {state.worldSeed} · chunk {Math.max(0, Math.floor((player?.y ?? 0) / CHUNK_HEIGHT))}<br/>tick {state.tick} · {state.tickMs.toFixed(2)} ms · {state.activeChunks} chunks<br/>x {player?.x.toFixed(1)} · y {player?.y.toFixed(1)} · ack {player?.ack}</div>}
+          {debug && <div className="debug-overlay">seed {state.worldSeed} · chunk {Math.max(0, Math.floor((player?.y ?? 0) / CHUNK_HEIGHT))}<br/>tick {state.tick} · {state.tickMs.toFixed(2)} ms · {state.activeChunks} chunks<br/>x {player?.x.toFixed(1)} · y {player?.y.toFixed(1)} · ack {player?.ack}<br/>{client.current?.networkStats.transport} · {client.current?.networkStats.pending} commandes non confirmées</div>}
           </div>
         </div>
         <div className="game-controls"><span><kbd>{keyName(settings.bindings.left)}</kbd><kbd>{keyName(settings.bindings.right)}</kbd> Bouger</span><span><kbd>{keyName(settings.bindings.jump)}</kbd> Sauter</span><span><kbd>{keyName(settings.bindings.push)}</kbd> Pousser</span><span><kbd>Échap</kbd> Menu</span><button className={`icon-button ${debug ? 'active' : ''}`} aria-label="Afficher le debug" onClick={() => setDebug(value => !value)}><Bug size={15}/></button></div>

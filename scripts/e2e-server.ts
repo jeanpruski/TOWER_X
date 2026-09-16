@@ -36,8 +36,16 @@ const mechanismsWeb = await createServer({ configFile: false, root: resolve(impo
   host: '127.0.0.1', port: 5185, strictPort: true, proxy: { '/api': 'http://127.0.0.1:3105', '/socket.io': { target: 'http://127.0.0.1:3105', ws: true } },
 } });
 await mechanismsWeb.listen();
+// Delayed transport tests have their own authentication budget and temporary world.
+const network = await createApp({ dataFile: join(directory, 'network.json'), secret: 'network-browser-test-secret-32-characters', origin: 'http://localhost:5186', silent: true, devTools: true, bots: 0 });
+network.store.state.world.seed = 42;
+await new Promise<void>(resolve => network.http.listen(3106, '127.0.0.1', resolve));
+const networkWeb = await createServer({ configFile: false, root: resolve(import.meta.dirname, '../apps/web'), plugins: [react()], server: {
+  host: '127.0.0.1', port: 5186, strictPort: true, proxy: { '/api': 'http://127.0.0.1:3106', '/socket.io': { target: 'http://127.0.0.1:3106', ws: true } },
+} });
+await networkWeb.listen();
 let closing = false;
 for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () => {
   if (closing) return; closing = true;
-  void (async () => { await web.close(); await populatedWeb.close(); await cooperativeWeb.close(); await mechanismsWeb.close(); await world.close(); await populated.close(); await cooperative.close(); await mechanisms.close(); await rm(directory, { recursive: true, force: true }); process.exit(0); })();
+  void (async () => { await web.close(); await populatedWeb.close(); await cooperativeWeb.close(); await mechanismsWeb.close(); await networkWeb.close(); await world.close(); await populated.close(); await cooperative.close(); await mechanisms.close(); await network.close(); await rm(directory, { recursive: true, force: true }); process.exit(0); })();
 });

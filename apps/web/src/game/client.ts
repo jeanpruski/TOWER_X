@@ -3,7 +3,7 @@ import { mechanismPlatforms, shoulderPlatforms, stepBody } from '@tower/game-cor
 import { DT, nearbyStandingsSchema, type EntryChoice, type Chunk, type CrumbleState, type Platform, type ClientToServerEvents, type FeedEntry, type NetworkPlayer, type PlayerInput, type PublicProfile, type ServerToClientEvents, type Snapshot, type NearbyStandings } from '@tower/shared';
 import { InputController, type Settings } from './input';
 import { GameAudio } from './audio';
-import { POWER_UPS, RARE_COSMETICS, type Relic, type Pickup, type GameEffect } from '@tower/shared';
+import { CHUNK_HEIGHT, POWER_UPS, RARE_COSMETICS, type Relic, type Pickup, type GameEffect } from '@tower/shared';
 import type { VisualEffect, MotionStamp } from './presentation';
 
 export interface GameState { unlockedCount: number; connected: boolean; reconnecting: boolean; player: NetworkPlayer | null; online: number; botCount: number; feedback: string; routeName: string; coopHint: string; standings: NearbyStandings | null; frontier: number; ping: number; tick: number; tickMs: number; activeChunks: number; worldSeed: number; feed: FeedEntry[]; gamepad: boolean; notice: string; }
@@ -19,9 +19,12 @@ export class GameClient {
   private predictionTick = 0;
   relics: Relic[] = []; pickups: Pickup[] = []; effects: VisualEffect[] = []; motion = new Map<string, MotionStamp>();
   private previousLocal: { x: number; y: number } | null = null;
+  private resetPosition = false;
   private correction = { x: 0, y: 0 }; private feedbackUntil = 0;
   private snapshots: { at: number; data: Snapshot }[] = [];
   private pending: PlayerInput[] = []; private sequence = 0; private accumulator = 0; private uiClock = 0;
+  private correctionCount = 0; private maxCorrection = 0; private hardCorrections = 0;
+  get networkStats() { return { transport: this.socket.io.engine?.transport.name ?? 'disconnected', pending: this.pending.length, correctionCount: this.correctionCount, maxCorrection: this.maxCorrection, hardCorrections: this.hardCorrections, snapshotAge: this.snapshots.length ? performance.now() - this.snapshots.at(-1)!.at : 0 }; }
   private pingTimer: ReturnType<typeof setInterval>; private onChange: (state: GameState) => void;
   constructor(settings: Settings, onChange: (state: GameState) => void, onMenu: () => void, onProfile: (profile: PublicProfile) => void, entry: EntryChoice = { mode: 'saved' }, onEntryRejected: (message: string) => void = () => {}) {
     this.onChange = onChange; this.input = new InputController(settings, onMenu); this.audio = new GameAudio(settings);
@@ -34,7 +37,9 @@ export class GameClient {
       joined = true;
       this.playerId = data.playerId; this.local = { ...data.player }; this.sequence = 0; this.pending = []; this.snapshots = [];
       this.accumulator = 0; this.cameraReady = false;
-      this.predictionTick = 0; this.crumbling = [];
+      this.predictionTick = data.tick ?? 0; this.crumbling = []; this.chunks.clear();
+      this.correctionCount = 0; this.maxCorrection = 0; this.hardCorrections = 0;
+      this.resetPosition = false;
       this.previousLocal = null; this.correction = { x: 0, y: 0 }; this.effects = []; this.motion.clear(); this.pickups = []; this.relics = []; this.bridges = [];
       this.state = { ...this.state, connected: true, reconnecting: false, notice: '', player: data.player, worldSeed: data.worldSeed, standings: null, unlockedCount: data.profile.unlockedCosmetics.length };
       onProfile(data.profile); this.publish();
@@ -52,14 +57,20 @@ export class GameClient {
     this.socket.on('notice', data => {
       if (data.v !== 1) return;
       this.state.notice = data.message;
-      if (data.reason === 'respawn') { this.state.feedback = data.message; this.feedbackUntil = performance.now() + 4500; }
+      if (data.reason === 'respawn') {
+        this.resetPosition = true;
+        this.pending = []; this.input.clear(); this.previousLocal = null; this.correction = { x: 0, y: 0 }; this.cameraReady = false;
+        this.state.feedback = data.message; this.feedbackUntil = performance.now() + 4500;
+      }
       this.publish();
     });
     this.socket.on('disconnect', reason => { this.state.connected = false; this.state.reconnecting = reason !== 'io server disconnect'; this.state.standings = null; this.state.online = 0; this.state.botCount = 0; this.state.feedback = ''; this.pickups = []; this.relics = []; this.bridges = []; this.effects = []; this.input.clear(); this.publish(); });
     this.socket.on('connect_error', error => { this.state.connected = false; this.state.notice = error.message === 'websocket error' ? 'Le monde est injoignable. Nouvelle tentative…' : error.message; this.publish(); });
     this.pingTimer = setInterval(() => {
       if (!this.socket.connected) return;
-      const start = performance.now(); this.socket.timeout(2500).emit('ping', () => { this.state.ping = Math.round(performance.now() - start); });
+      const start = performance.now(); this.socket.timeout(2500).emit('ping', (error: Error | null) => {
+        this.state.ping = error ? 0 : Math.round(performance.now() - start);
+      });
     }, 2500);
     this.socket.connect();
   }
@@ -88,21 +99,26 @@ export class GameClient {
     }
   }
   private reconcile(snapshot: Snapshot) {
-    if (snapshot.v !== 1) return;
+    if (snapshot.v !== 1 || snapshot.tick <= (this.snapshots.at(-1)?.data.tick ?? -1)) return;
     this.snapshots.push({ at: performance.now(), data: snapshot }); if (this.snapshots.length > 12) this.snapshots.shift();
     this.bridges = snapshot.bridges ?? [];
     this.crumbling = snapshot.crumbling ?? [];
     this.predictionTick = snapshot.tick;
     const own = snapshot.players.find(p => p.id === this.playerId);
     if (own) {
-      this.pending = this.pending.filter(input => input.seq > own.ack);
+      const reset = this.resetPosition; this.resetPosition = false;
+      this.pending = reset ? [] : this.pending.filter(input => input.seq > own.ack);
       const corrected = { ...own };
       for (const input of this.pending) { this.predictionTick++; stepBody(corrected, input, this.platforms(corrected, snapshot.players), DT); }
       if (this.local) {
         const dx = this.local.x - corrected.x, dy = this.local.y - corrected.y;
-        if (Math.abs(dy) > 80 || Math.abs(dx) > 60) { this.cameraReady = false; this.previousLocal = null; this.correction = { x: 0, y: 0 }; }
+        if (!reset) {
+          this.correctionCount++; this.maxCorrection = Math.max(this.maxCorrection, Math.hypot(dx, dy));
+          if (Math.abs(dy) > 80 || Math.abs(dx) > 60) this.hardCorrections++;
+        }
+        if (reset || Math.abs(dy) > 80 || Math.abs(dx) > 60) { this.cameraReady = false; this.previousLocal = null; this.correction = { x: 0, y: 0 }; }
         else {
-          this.correction.x = Math.max(-24, Math.min(24, this.correction.x + dx)); this.correction.y = Math.max(-24, Math.min(24, this.correction.y + dy));
+          this.correction.x = Math.max(-48, Math.min(48, this.correction.x + dx)); this.correction.y = Math.max(-48, Math.min(48, this.correction.y + dy));
           if (this.previousLocal) { this.previousLocal.x -= dx; this.previousLocal.y -= dy; }
         }
       }
@@ -116,10 +132,10 @@ export class GameClient {
   update(milliseconds: number) {
     const dt = Math.min(milliseconds, 100) / 1000;
     this.uiClock += dt; this.accumulator += dt;
-    this.correction.x *= Math.exp(-dt * 18); this.correction.y *= Math.exp(-dt * 18);
+    this.correction.x *= Math.exp(-dt * 12); this.correction.y *= Math.exp(-dt * 12);
     this.effects = this.effects.filter(effect => performance.now() - effect.at < 650);
     if (performance.now() > this.feedbackUntil) this.state.feedback = '';
-    if (this.local && this.state.connected) {
+    if (this.local && this.state.connected && this.chunks.has(Math.max(0, Math.floor(this.local.y / CHUNK_HEIGHT)))) {
       while (this.accumulator >= DT) {
         this.accumulator -= DT;
         // Bound prediction if acknowledgements stop. Never replay an unbounded backlog.
@@ -133,7 +149,9 @@ export class GameClient {
         if (this.local.grounded && !previous.grounded) this.audio.land();
         this.local.pushHeld = input.push;
       }
-      const target = Math.max(0, this.local.y + Math.max(0, this.local.vy) * 0.08);
+      // Follow the same smoothed position as the visible mage, so corrections do
+      // not move the entire tower while the character is still easing into place.
+      const target = Math.max(0, this.renderLocal()!.y + Math.max(0, this.local.vy) * 0.08);
       this.cameraY = this.cameraReady ? this.cameraY + (target - this.cameraY) * Math.min(1, dt * 7) : target; this.cameraReady = true;
     } else this.accumulator = 0;
     if (this.uiClock > 0.1) {
@@ -149,6 +167,11 @@ export class GameClient {
   }
   renderPlatforms(): Platform[] { return [...mechanismPlatforms([...this.chunks.values()], this.renderTick, this.crumbling), ...this.bridges]; }
   get renderTick() { return Math.max(0, this.predictionTick - 1) + Math.min(1, this.accumulator / DT); }
+  private renderLocal(): NetworkPlayer | null {
+    if (!this.local) return null;
+    const previous = this.previousLocal ?? this.local, alpha = Math.min(1, this.accumulator / DT);
+    return { ...this.local, x: previous.x + (this.local.x - previous.x) * alpha + this.correction.x, y: previous.y + (this.local.y - previous.y) * alpha + this.correction.y };
+  }
   renderPlayers(): NetworkPlayer[] {
     const target = performance.now() - 100;
     const before = [...this.snapshots].reverse().find(s => s.at <= target) ?? this.snapshots[0];
@@ -163,10 +186,7 @@ export class GameClient {
         others.push({ ...p, x: teleport ? p.x : previous.x + (p.x - previous.x) * alpha, y: teleport ? p.y : previous.y + (p.y - previous.y) * alpha });
       }
     }
-    if (this.local) {
-      const previous = this.previousLocal ?? this.local, alpha = Math.min(1, this.accumulator / DT);
-      others.push({ ...this.local, x: previous.x + (this.local.x - previous.x) * alpha + this.correction.x, y: previous.y + (this.local.y - previous.y) * alpha + this.correction.y });
-    }
+    const local = this.renderLocal(); if (local) others.push(local);
     const now = performance.now(), visible = new Set(others.map(p => p.id));
     for (const id of this.motion.keys()) if (!visible.has(id)) this.motion.delete(id);
     for (const p of others) {

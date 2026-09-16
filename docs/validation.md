@@ -210,6 +210,38 @@ Monde éphémère en mode fichier, transport WebSocket local, vingt clients de c
 
 Ces valeurs décrivent ce test sur cette machine. Elles ne prédisent pas la latence Internet, une charge de plusieurs heures ou le comportement d’une grosse base PostgreSQL.
 
+## Corrections réseau du 16 septembre 2026
+
+Le test `tests/e2e/network.spec.ts` effectue cinq sauts dans Chrome, sur un monde
+temporaire sans bots, avec 75 ms de délai par sens et 40 ms de jitter périodique.
+Il couvre WebSocket ainsi que son échec réel suivi du repli HTTP polling.
+Les messages WebSocket conservent leur ordre ; les requêtes HTTP sont retardées
+avant transmission et après réception. Les relevés sont joints au rapport Playwright.
+
+| Maximum observé pendant le scénario | HTTP avant correction | HTTP corrigé | WebSocket corrigé |
+| --- | ---: | ---: | ---: |
+| Commandes non confirmées | 30 | 19–23 | 11 |
+| Âge du dernier snapshot reçu | 672 ms | 239–390 ms | 132–140 ms |
+| Écart physique à réconcilier | 42,2 px | 21,9–35,9 px | 9,7–19,5 px |
+
+Les plages représentent les passages observés, pas des percentiles ni une mesure
+du ping chez PlanetHoster. Les tests vérifient aussi l'absence de correction dépassant
+le seuil de téléportation pendant ces sauts, ainsi que leur hauteur effective.
+La simulation distante reste autoritaire : le lissage ne modifie pas les collisions.
+
+La suite contient 100 tests unitaires/intégration, dont les reprises après trou de
+séquence, les sauts brefs dans un lot de commandes, l'attente des plateformes à
+l'arrivée, les snapshots anciens, le retour au camp et les timeouts de ping.
+La compilation et la validation des 800 chunks solo, 200 chunks coopératifs et
+4 100 phases de navettes passent. Les scénarios navigateur couvrent aussi deux
+joueurs, la reconnexion, les comptes, les compagnons, les poussées, les mécanismes
+et le choix du départ. Les scénarios de transport utilisent un monde séparé pour
+ne pas épuiser les quotas d'authentification des autres fixtures ; les deux visiteurs
+quittent explicitement la tour avant la fermeture de leurs contextes HTTP.
+
+Le WebSocket public reste défectueux au contrôle du proxy ; un playtest humain
+sur l'hébergement après déploiement et intervention du support reste nécessaire.
+
 ## Points encore à éprouver
 
 - Playtests humains à 1, 2, 5, 10 et 20+ : rythme, timing des navettes, délai des dalles, lisibilité des tremplins, compréhension des courtes échelles, disponibilité des aides pour plusieurs retardataires, wall-jump, poussée, frustration et lisibilité des foules.

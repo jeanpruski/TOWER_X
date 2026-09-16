@@ -83,14 +83,16 @@ Le serveur :
 
 1. Authentifie le cookie de session au handshake et au `join`.
 2. Valide le numéro de version, les bornes et la séquence des entrées.
-3. Ne consomme qu’une nouvelle entrée par tick et borne la file à 12 entrées. Envoyer plus de paquets n’accélère pas le monde.
-4. Neutralise les commandes après 250 ms sans entrée.
+3. Ne consomme qu’une nouvelle entrée par tick. Les déplacements en attente sont remplacés par leur valeur récente, en conservant les transitions appui/relâchement de saut et de poussée. La file conserve au plus huit transitions ; les excès remplacent les anciennes commandes. Envoyer plus de paquets n’accélère pas le monde. Un trou dans la séquence est accepté après une interruption, mais un numéro déjà reçu est rejeté.
+4. Neutralise les commandes après 500 ms sans entrée, pour tolérer les arrivées groupées du transport HTTP. Au retour au camp, confirme aussi les commandes abandonnées.
 5. Résout plateformes, joueurs, impacts et poussées ; calcule record et camp.
-6. Émet les snapshots à 15 Hz avec le numéro de la dernière entrée consommée.
+6. Prépare les snapshots à 15 Hz avec le numéro de la dernière entrée consommée. Chaque connexion ne garde qu’un snapshot récent en attente : le suivant remplace le précédent. Le hook `ready` du transport Engine.IO le joint au prochain long-poll HTTP, avant la vidange des événements fiables. Il est réattaché lors du passage en WebSocket et retiré à la déconnexion ; aucune file illimitée de positions n’est créée.
 
 Le client rejoue les entrées non confirmées à partir de la position autoritaire. Les autres personnages interpolent les snapshots avec 100 ms de retard. La prédiction locale ne simule pas les collisions avec les joueurs distants : le serveur corrige ces interactions. Il faut régler le ressenti avec de la latence réelle.
 
-Le rendu local interpole les deux positions simulées et amortit les petites corrections, sans modifier la position physique. Une téléportation réinitialise ce lissage. Les appuis clavier/tactiles sur saut et poussée sont mémorisés jusqu’à un échantillonnage : une pression de moins de 33 ms ne disparaît plus entre deux ticks. Le blur et les menus vident ce tampon.
+Le rendu local interpole les deux positions simulées et amortit les petites corrections, sans modifier la position physique. La caméra suit cette même position lissée. Une téléportation réinitialise ce lissage. Le client attend la géométrie initiale avant de simuler ; `welcome.tick` synchronise les plateformes animées dès l’arrivée. Un snapshot plus ancien est ignoré et le retour au camp efface les commandes prédites. Les appuis clavier/tactiles sur saut et poussée sont mémorisés jusqu’à un échantillonnage : une pression de moins de 33 ms ne disparaît plus entre deux ticks. Le blur et les menus vident ce tampon.
+
+Les records sont calculés chaque tick et figurent dans les snapshots. Le paquet de profil complet lié aux records est regroupé à 2 Hz, pour éviter d’encombrer le transport pendant chaque saut. Les changements de tenue, camps et trouvailles gardent leurs notifications immédiates. Un ping expiré affiche « — » ; le panneau de debug indique le transport et le nombre de commandes non confirmées.
 
 Les événements `effect` sont fiables et limités à la zone d’intérêt, contrairement aux snapshots volatiles. Une poussée décrit l’acteur, sa direction et les cibles réellement touchées, avec un drapeau d’absorption par bulle. Une tentative valide dans le vide produit un geste et un message distinct. Les effets distants suivent les 100 ms d’interpolation ; les effets locaux sont immédiats à la réception. Le HUD de recharge et le cadre de portée utilisent les mêmes constantes que le serveur. Aucun effet visuel ne décide du résultat physique.
 

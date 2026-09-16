@@ -10,6 +10,8 @@ import { Store, publicProfile } from './store';
 import { rankPlayers, standingsAround } from './standings';
 import { BOT_COLOR, RELIC_INTERVAL_CHUNKS, normalizeCosmetics, type GameEffect, type PushHit } from '@tower/shared';
 import { BotBrain, BOT_NAMES, BOT_HATS } from './bots';
+import { bufferInput } from './input-buffer';
+import { latestSnapshots } from './snapshots';
 
 type GameSocket = Socket<ClientToServerEvents, ServerToClientEvents>;
 type GameIO = Server<ClientToServerEvents, ServerToClientEvents>;
@@ -26,6 +28,8 @@ export class World {
   readonly pickupCooldowns = new Map<string, number>();
   readonly cooperation = new Cooperation();
   readonly mechanisms = new TowerMechanisms();
+  private readonly dirtyProfiles = new Set<string>();
+  private readonly snapshotSenders = new Map<GameSocket, ReturnType<typeof latestSnapshots>>();
   tick = 0; tickMs = 0; maxTickMs = 0; rejectedInputs = 0; private elapsed = 0;
   private lastTime = performance.now(); private timer?: ReturnType<typeof setInterval>;
   constructor(readonly io: GameIO, readonly store: Store, readonly auth: Auth, readonly log: Logger, private devTools = false, private maxBots = 3) {}
@@ -65,10 +69,12 @@ export class World {
     for (const player of this.players.values()) if (player.sessionHash === hash) player.socket?.disconnect(true);
   }
   updateProfile(id: string) {
+    this.dirtyProfiles.delete(id);
     const player = this.players.get(id);
     if (player) player.socket?.emit('profileUpdate', { v: 1, profile: publicProfile(player.profile) });
   }
   private connect(socket: GameSocket) {
+    this.snapshotSenders.set(socket, latestSnapshots(socket));
     const inputLimit = new RateLimiter(90, 1000);
     const actionLimit = new RateLimiter(5, 5000);
     const joinedDeadline = setTimeout(() => { if (![...this.players.values()].some(p => p.socket === socket)) socket.disconnect(true); }, 10000);
@@ -105,7 +111,7 @@ export class World {
         player.sessionHash = this.auth.tokenHash(socket.handshake.headers.cookie)!;
       }
       socket.data.playerId = profile.id;
-      socket.emit('welcome', { v: 1, playerId: profile.id, worldSeed: this.store.state.world.seed, worldVersion: this.store.state.world.version, tickRate: TICK_RATE, profile: publicProfile(profile), player: this.serialize(player) });
+      socket.emit('welcome', { v: 1, tick: this.tick, playerId: profile.id, worldSeed: this.store.state.world.seed, worldVersion: this.store.state.world.version, tickRate: TICK_RATE, profile: publicProfile(profile), player: this.serialize(player) });
       this.sendChunks(player);
       this.feed(`${profile.displayName} rejoint l’ascension.`, 'join');
       this.persist();
@@ -115,8 +121,10 @@ export class World {
       if (!player || player.socket !== socket) return;
       if (!inputLimit.allow(socket.id)) { this.rejectedInputs++; return; }
       const data = inputSchema.safeParse(raw);
-      if (!data.success || data.data.seq <= player.receivedSeq || data.data.seq > player.receivedSeq + 200 || player.queue.length >= 12) { this.rejectedInputs++; return; }
-      player.receivedSeq = data.data.seq; player.queue.push(data.data); player.lastInputAt = Date.now();
+      if (!data.success || data.data.seq <= player.receivedSeq) { this.rejectedInputs++; return; }
+      // Sequence numbers order controls; they never decide how much time to simulate.
+      // Allow gaps after a network stall instead of permanently rejecting that client.
+      player.receivedSeq = data.data.seq; bufferInput(player.queue, data.data); player.lastInputAt = Date.now();
     });
     socket.on('respawn', raw => {
       const p = this.players.get(socket.data.playerId as string);
@@ -131,9 +139,11 @@ export class World {
       const parsed = teleportSchema.safeParse(raw); const p = this.players.get(socket.data.playerId as string);
       if (!parsed.success || p?.socket !== socket) return;
       Object.assign(p.body, createBody(p.body.id)); p.body.y = parsed.data.chunkIndex * CHUNK_HEIGHT; p.sentChunk = -1;
+      this.snapshotSenders.get(socket)?.clear();
     });
     socket.on('ping', ack => { if (typeof ack === 'function' && actionLimit.allow(`ping:${socket.id}`)) ack(); });
     socket.on('disconnect', () => {
+      this.snapshotSenders.delete(socket);
       clearTimeout(joinedDeadline);
       const player = this.players.get(socket.data.playerId as string);
       if (player?.socket === socket) { player.socket = null; player.disconnectedAt = Date.now(); player.queue = []; player.input = neutralInput(); this.persist(); }
@@ -183,7 +193,9 @@ export class World {
   private respawn(player: Player, reason: 'camp' | 'spikes' | 'base' = 'camp') {
     if (reason === 'base') { player.profile.lastCamp = 0; this.updateProfile(player.profile.id); this.persist(); }
     Object.assign(player.body, createBody(player.profile.id, player.profile.lastCamp));
+    player.ack = player.receivedSeq;
     player.queue = []; player.input = neutralInput(player.ack); player.sentChunk = -1;
+    if (player.socket) this.snapshotSenders.get(player.socket)?.clear();
     player.socket?.emit('notice', { v: 1, reason: 'respawn', message: reason === 'base' ? 'De retour au pied de la tour. Votre record et votre collection sont conservés.' : reason === 'spikes' ? 'Aïe, les pics ! Retour au camp. Votre record est conservé.' : 'De retour au camp. Votre record est conservé.' });
   }
   private sendChunks(p: Player) {
@@ -208,7 +220,7 @@ export class World {
       const platforms = this.platformsAt(p.body.y);
       const next = p.bot?.input(p.body, platforms, humans, this.tick, gap ? { gap, helperId: this.cooperation.helpers.get(gap.id), allies: active.map(p => p.body) } : undefined) ?? p.queue.shift();
       if (next) { p.input = next; p.ack = next.seq; }
-      else if (Date.now() - p.lastInputAt > 250) p.input = neutralInput(p.ack);
+      else if (Date.now() - p.lastInputAt > 500) p.input = neutralInput(p.ack);
       stepBody(p.body, p.input, platforms, DT);
     }
     const bodies = active.map(p => p.body);
@@ -238,7 +250,7 @@ export class World {
         this.effect({ v: 1, id: `${this.tick}:${p.body.id}:${relic.id}`, kind: 'unlock', actorId: p.body.id, x: relic.x, y: relic.y, cosmeticId: relic.cosmeticId, duplicate });
       }
       const best = heightInMeters(p.body.y);
-      if (best > p.profile.personalBest) { p.profile.personalBest = best; this.updateProfile(p.profile.id); }
+      if (best > p.profile.personalBest) { p.profile.personalBest = best; if (!p.bot) this.dirtyProfiles.add(p.profile.id); }
       const index = Math.max(0, Math.round(p.body.y / CHUNK_HEIGHT));
       if (p.body.grounded && index % CAMP_INTERVAL === 0 && Math.abs(p.body.y - index * CHUNK_HEIGHT) < 0.1 && p.profile.lastCamp !== index) {
         p.profile.lastCamp = index;
@@ -253,6 +265,9 @@ export class World {
     this.store.state.world.frontier = Math.max(this.store.state.world.frontier, this.frontier);
     this.mechanisms.update(activeChunks, bodies, this.tick);
     if (this.tick % 2 === 0) this.broadcast(active);
+    // Records remain authoritative every tick and visible in snapshots. Coalesce the
+    // heavier reliable profile packets so a rising player cannot starve HTTP snapshots.
+    if (this.tick % 15 === 0) for (const id of this.dirtyProfiles) this.updateProfile(id);
     if (this.tick % 150 === 0) {
       for (const [id, ready] of this.pickupCooldowns) if (ready <= this.tick) this.pickupCooldowns.delete(id);
       const used = new Set<number>();
@@ -282,7 +297,7 @@ export class World {
         frontier: this.frontier, frontRunnerId: ranked.find(entry => !entry.isBot)?.id ?? null,
         tickMs: this.tickMs, activeChunks: this.chunks.size,
       };
-      p.socket?.volatile.emit('snapshot', snapshot);
+      this.snapshotSenders.get(p.socket)?.send(snapshot);
     }
   }
 }
