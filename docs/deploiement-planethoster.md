@@ -245,6 +245,16 @@ Message prêt à transmettre au support :
 
 Référence du support : [proxy WebSocket Node automatique de LiteSpeed](https://docs.litespeedtech.com/lsws/cp/cpanel/cloudlinux/#nodejs-automatic-websocket-proxy).
 
+## Nombre de compagnons
+
+Le défaut est désormais un seul bot pour le monde. Pour une installation existante,
+remplacer `BOT_COUNT=3` par `BOT_COUNT=1` dans `project/.env`, puis redémarrer
+l'application dans N0C. Cette configuration fonctionne aussi avec la version
+précédente : aucune compilation ni migration n'est nécessaire pour changer le nombre.
+Si `BOT_COUNT` est défini dans les variables d'environnement de N0C, modifier aussi
+cette valeur : elle a priorité sur le fichier `.env`. Une fois dans la tour, le
+panneau de proximité doit indiquer « + 1 BOT COMPAGNON ».
+
 ## Mises à jour
 
 Sauvegarder PostgreSQL et arrêter l'application dans N0C, puis dans son

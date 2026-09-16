@@ -54,19 +54,19 @@ describe('populated authoritative world', () => {
     expect(a.player.body).toMatchObject({ x: 160, y: 5 * CHUNK_HEIGHT, protection: 2, feather: 0, boots: false, bubble: false });
     expect(a.player.profile).toMatchObject({ lastCamp: 5, personalBest: 400, mask: 'verdant', unlockedCosmetics: ['mask:verdant'] });
   });
-  it('adds three identifiable bots, keeps human counts and persistent records separate, and keeps helpers available as humans join', async () => {
+  it('adds one identifiable bot by default, keeps human counts and persistent records separate, and keeps the helper available as humans join', async () => {
     expect(server.world.botCount).toBe(0);
     const a = await connect();
     const snapshot = await new Promise<Snapshot>(resolve => a.socket.once('snapshot', resolve));
-    expect(snapshot.playerCount).toBe(1); expect(snapshot.botCount).toBe(3); expect(snapshot.players.filter(p => p.isBot)).toHaveLength(3);
+    expect(snapshot.playerCount).toBe(1); expect(snapshot.botCount).toBe(1); expect(snapshot.players.filter(p => p.isBot)).toHaveLength(1);
     expect(server.world.joinablePlayers(a.player.body.id)).toEqual([]);
-    expect([...snapshot.standings.above, ...snapshot.standings.below].filter(p => p.isBot)).toHaveLength(3);
+    expect([...snapshot.standings.above, ...snapshot.standings.below].filter(p => p.isBot)).toHaveLength(1);
     for (const bot of snapshot.players.filter(p => p.isBot)) expect(bot).toMatchObject({ color: BOT_COLOR, mask: 'ivory' });
     for (const bot of [...snapshot.standings.above, ...snapshot.standings.below].filter(p => p.isBot)) expect(bot.color).toBe(BOT_COLOR);
     expect(nearbyStandingsSchema.safeParse(snapshot.standings).success).toBe(true);
     expect(snapshot.players.find(p => !p.isBot)!.color).not.toBe(BOT_COLOR);
     expect(snapshot.frontRunnerId).toBe(a.player.body.id); expect(server.store.state.profiles).toHaveLength(1);
-    for (let n = 2; n <= 4; n++) { await connect(); await delay(45); expect(server.world.online).toBe(n); expect(server.world.botCount).toBe(3); }
+    for (let n = 2; n <= 4; n++) { await connect(); await delay(45); expect(server.world.online).toBe(n); expect(server.world.botCount).toBe(1); }
     for (const socket of sockets) socket.disconnect(); await delay(60);
     expect(server.world.online).toBe(0); expect(server.world.botCount).toBe(0);
     expect(server.store.state.profiles.some(p => p.id.startsWith('bot-'))).toBe(false);

@@ -2,14 +2,14 @@ import { test, expect } from '@playwright/test';
 import { io, type Socket } from 'socket.io-client';
 import { BOT_COLOR, type Welcome } from '@tower/shared';
 
-test('a solo visitor sees three climbing companions and collects a visible feather using movement inputs', async ({ page }) => {
+test('a solo visitor sees one climbing companion by default and collects a visible feather using movement inputs', async ({ page }) => {
   const errors: string[] = []; page.on('pageerror', error => errors.push(error.message));
   await page.goto('http://localhost:5182'); await page.getByRole('button', { name: 'Jouer en invité', exact: true }).click(); await page.getByRole('button', { name: 'Commencer la partie', exact: true }).click();
   const panel = page.getByRole('region', { name: 'Autour de vous' });
   await expect(panel.getByText('1 MAGE EN LIGNE')).toBeVisible();
-  await expect(panel.getByText('+ 3 BOTS COMPAGNONS')).toBeVisible();
-  await expect(panel.locator('.bot-badge')).toHaveCount(3);
-  await expect.poll(() => page.evaluate(color => { const bots = window.towerDebug!.inspect().players.filter(p => p.isBot); return bots.length === 3 && bots.every(p => p.color === color && p.mask === 'ivory'); }, BOT_COLOR)).toBe(true);
+  await expect(panel.getByText('+ 1 BOT COMPAGNON', { exact: true })).toBeVisible();
+  await expect(panel.locator('.bot-badge')).toHaveCount(1);
+  await expect.poll(() => page.evaluate(color => { const bots = window.towerDebug!.inspect().players.filter(p => p.isBot); return bots.length === 1 && bots.every(p => p.color === color && p.mask === 'ivory'); }, BOT_COLOR)).toBe(true);
   await expect(page.locator('.push-status')).toContainText('protégée');
   await expect.poll(() => page.evaluate(() => window.towerDebug!.inspect().players.some(p => p.isBot && p.y > 36))).toBe(true);
   await page.screenshot({ path: 'test-results/companions-bonuses-desktop.png', fullPage: true });

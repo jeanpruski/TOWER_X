@@ -13,7 +13,7 @@ const web = await createServer({ configFile: false, root: resolve(import.meta.di
 } });
 await web.listen();
 // Separate populated world for companion/bonus scenarios; legacy tests keep their own empty world.
-const populated = await createApp({ dataFile: join(directory, 'companions.json'), secret: 'populated-browser-test-secret-32-characters', origin: 'http://localhost:5182', silent: true, devTools: true, bots: 3 });
+const populated = await createApp({ dataFile: join(directory, 'companions.json'), secret: 'populated-browser-test-secret-32-characters', origin: 'http://localhost:5182', silent: true, devTools: true });
 populated.store.state.world.seed = 42;
 await new Promise<void>(resolve => populated.http.listen(3102, '127.0.0.1', resolve));
 const populatedWeb = await createServer({ configFile: false, root: resolve(import.meta.dirname, '../apps/web'), plugins: [react()], server: {

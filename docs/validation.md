@@ -114,7 +114,7 @@ Les trois parcours retenus pour cette modification passent : accueil/réglages, 
 3. Choix du masque et du chapeau à l’inscription ; garde-robe en partie, changement du pseudonyme, de la robe, du masque et du chapeau, pièces verrouillées, déconnexion puis reconnexion à la tenue sauvegardée ; contrôle du rendu mobile.
 4. Branchement à chaud d’une Gamepad API simulée, saut avec le bouton Sud, ouverture du menu avec Start, débranchement et reprise au clavier après respawn.
 5. Onze joueurs réels du serveur de test, placés à différentes hauteurs : cinq devant, cinq derrière, rang et écarts vérifiés même hors de la zone de rendu ; compteur et classement mis à jour au départ d’un joueur. Le scénario utilise la téléportation de développement dans un monde temporaire.
-6. Un invité et trois compagnons : identification BOT, tenues noires et masques ivoire vérifiés dans le snapshot, compteur humain distinct, bots qui montent, ramassage réel d’une plume via les entrées de déplacement et de saut, affichage du bonus et suppression au retour au camp, mobile sans débordement.
+6. Un invité et un compagnon par défaut : identification BOT, tenues noires et masques ivoire vérifiés dans le snapshot, compteur humain distinct, bots qui montent, ramassage réel d’une plume via les entrées de déplacement et de saut, affichage du bonus et suppression au retour au camp, mobile sans débordement.
 7. Deux clients proches hors camp : un appui bref sur E produit une poussée confirmée, le HUD indique la recharge, puis une tentative dans le vide donne un message distinct. Ce test a révélé et vérifie la correction des appuis perdus entre deux ticks de simulation.
 
 8. Un invité ouvre sa garde-robe aléatoire et verrouillée, puis rejoint le tronçon 626 du seed 42, où se trouve le masque du lierre, par le helper de développement. Des entrées réelles de déplacement/saut permettent ensuite de ramasser le coffre sur un balcon facultatif. Le test vérifie la notification, la conservation après retour au camp, la conversion du même invité en compte, l’équipement du masque du lierre et sa persistance après rechargement. Un second navigateur rejoint ensuite la partie : il reçoit le masque rare équipé et affiche le badge ◆ RARE du propriétaire. Le même joueur trouve ensuite un doublon au chunk 1284 et conserve sa collection à 1/12 après reconnexion. Captures bureau/mobile `rare-observed-desktop.png`, `rare-observed-mobile.png` et `rare-duplicate-mobile.png`.
@@ -131,7 +131,7 @@ Les tests serveur vérifient aussi la limite de cinq voisins sur chaque côté a
 
 La manette est simulée par l’API du navigateur : cela vérifie les actions et le branchement à chaud, sans certifier l’ergonomie d’un périphérique physique.
 
-Les tests supplémentaires simulent les trois cerveaux de bot sur quatre seeds pendant 900 ticks sans téléportation, leur ascension indépendante d’un joueur immobile, le maintien des trois compagnons même avec quatre humains et leur absence du stockage des profils. Les bonus sont vérifiés sur 300 chunks : contact sur une plateforme sûre, saut et expiration de plume, consommation des bottes, absorption d’une poussée par la bulle, attribution unique d’un pickup partagé et réapparition après 30 secondes.
+Les tests supplémentaires simulent les trois cerveaux de bot sur quatre seeds pendant 900 ticks sans téléportation, leur ascension indépendante d’un joueur immobile, le maintien du compagnon par défaut même avec quatre humains et leur absence du stockage des profils. Les bonus sont vérifiés sur 300 chunks : contact sur une plateforme sûre, saut et expiration de plume, consommation des bottes, absorption d’une poussée par la bulle, attribution unique d’un pickup partagé et réapparition après 30 secondes.
 
 Le contrôle du terrain couvre les hauteurs/largeurs variées et plateformes facultatives, puis dix chunks consécutifs traversés par deux personnages sans bonus ni réinitialisation sur trois seeds. Le saut maintenu est mesuré entre 77 et 80 px, avec un petit saut distinct au relâchement. Une sauvegarde version 1 est mise à jour en conservant son seed, son record et ses camps ; un personnage de retour retrouve un sol sûr aux mêmes coordonnées.
 
@@ -190,6 +190,8 @@ Les parcours de mécanismes et de reliques vérifient les nouvelles étiquettes 
 Sur un petit écran, tous les noms d’une foule serrée ne tiennent pas simultanément : le placement masque les étiquettes excédentaires en gardant leur taille, et les joueurs restent identifiables dans le panneau latéral. Les textes très longs peuvent être abrégés avec des points de suspension. Ces vérifications automatisées et l’inspection des captures ne remplacent pas un playtest humain de la lisibilité en mouvement.
 
 ## Mesure réseau à 20 joueurs
+
+Mesure historique avec trois compagnons ; depuis le 16 septembre 2026, le réglage par défaut est un compagnon.
 
 Commande : `PLAYERS=20 DURATION=30 npm run test:load`.
 

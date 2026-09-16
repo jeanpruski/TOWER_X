@@ -51,7 +51,7 @@ export async function createApp(options: AppOptions) {
     },
   });
   io.use((socket, next) => auth.authenticate(socket.handshake.headers.cookie) ? next() : next(new Error('Session expirée. Rejoignez à nouveau la tour.')));
-  const maxBots = options.bots ?? 3;
+  const maxBots = options.bots ?? 1;
   if (!Number.isInteger(maxBots) || maxBots < 0 || maxBots > 3) throw new Error('bots must be an integer from 0 to 3');
   const world = new World(io, store, auth, log, options.devTools && !options.production, maxBots);
   app.use('/api/auth', authRouter(auth, hash => world.revoke(hash), id => world.updateProfile(id)));

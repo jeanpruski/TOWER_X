@@ -32,7 +32,7 @@ export class World {
   private readonly snapshotSenders = new Map<GameSocket, ReturnType<typeof latestSnapshots>>();
   tick = 0; tickMs = 0; maxTickMs = 0; rejectedInputs = 0; private elapsed = 0;
   private lastTime = performance.now(); private timer?: ReturnType<typeof setInterval>;
-  constructor(readonly io: GameIO, readonly store: Store, readonly auth: Auth, readonly log: Logger, private devTools = false, private maxBots = 3) {}
+  constructor(readonly io: GameIO, readonly store: Store, readonly auth: Auth, readonly log: Logger, private devTools = false, private maxBots = 1) {}
   get online() { return [...this.players.values()].filter(p => p.socket).length; }
   get botCount() { return [...this.players.values()].filter(p => p.bot).length; }
   get frontier() { return Math.max(0, ...[...this.players.values()].filter(p => p.socket).map(p => heightInMeters(p.body.y))); }
