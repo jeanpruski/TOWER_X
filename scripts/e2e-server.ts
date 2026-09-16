@@ -44,8 +44,16 @@ const networkWeb = await createServer({ configFile: false, root: resolve(import.
   host: '127.0.0.1', port: 5186, strictPort: true, proxy: { '/api': 'http://127.0.0.1:3106', '/socket.io': { target: 'http://127.0.0.1:3106', ws: true } },
 } });
 await networkWeb.listen();
+// N0C: HTTP-only Socket.IO, with no WebSocket upgrade advertised to browsers.
+const n0c = await createApp({ dataFile: join(directory, 'n0c.json'), secret: 'n0c-browser-test-secret-32-characters', origin: 'http://localhost:5187', silent: true, devTools: true, bots: 0, socketTransport: 'polling' });
+n0c.store.state.world.seed = 42;
+await new Promise<void>(resolve => n0c.http.listen(3107, '127.0.0.1', resolve));
+const n0cWeb = await createServer({ configFile: false, root: resolve(import.meta.dirname, '../apps/web'), plugins: [react()], server: {
+  host: '127.0.0.1', port: 5187, strictPort: true, proxy: { '/api': 'http://127.0.0.1:3107', '/socket.io': { target: 'http://127.0.0.1:3107', ws: true } },
+} });
+await n0cWeb.listen();
 let closing = false;
 for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () => {
   if (closing) return; closing = true;
-  void (async () => { await web.close(); await populatedWeb.close(); await cooperativeWeb.close(); await mechanismsWeb.close(); await networkWeb.close(); await world.close(); await populated.close(); await cooperative.close(); await mechanisms.close(); await network.close(); await rm(directory, { recursive: true, force: true }); process.exit(0); })();
+  void (async () => { await web.close(); await populatedWeb.close(); await cooperativeWeb.close(); await mechanismsWeb.close(); await networkWeb.close(); await n0cWeb.close(); await world.close(); await populated.close(); await cooperative.close(); await mechanisms.close(); await network.close(); await n0c.close(); await rm(directory, { recursive: true, force: true }); process.exit(0); })();
 });

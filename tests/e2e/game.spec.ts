@@ -16,9 +16,10 @@ test('landing, settings and responsive layout', async ({ page }) => {
   expect(errors).toEqual([]);
 });
 
-for (const unavailableWebSocket of [false, true]) test(`two browsers join, jump, keep their record and reconnect${unavailableWebSocket ? ' with WebSocket unavailable' : ''}`, async ({ browser }) => {
+for (const mode of ['auto', 'blocked', 'n0c']) test(`two browsers join, jump, keep their record and reconnect (${mode})`, async ({ browser }) => {
+  const base = mode === 'n0c' ? 'http://localhost:5187' : 'http://localhost:5181';
   const first = await browser.newContext(), second = await browser.newContext();
-  if (unavailableWebSocket) for (const context of [first, second]) await context.addInitScript(() => {
+  if (mode === 'blocked') for (const context of [first, second]) await context.addInitScript(() => {
     const NativeWebSocket = window.WebSocket;
     // Fail the real WebSocket connection while leaving HTTP polling available.
     window.WebSocket = class extends NativeWebSocket {
@@ -30,8 +31,13 @@ for (const unavailableWebSocket of [false, true]) test(`two browsers join, jump,
     };
   });
   const a = await first.newPage(), b = await second.newPage(); const errors: string[] = [];
+  const webSockets: string[] = [];
+  for (const page of [a, b]) page.on('websocket', socket => { if (new URL(socket.url()).pathname.startsWith('/socket.io/')) webSockets.push(socket.url()); });
   a.on('pageerror', error => errors.push(error.message)); b.on('pageerror', error => errors.push(error.message));
-  for (const page of [a, b]) { await page.goto('/'); await page.getByRole('button', { name: 'Jouer en invité', exact: true }).click(); await page.getByRole('button', { name: 'Commencer la partie', exact: true }).click(); await expect(page.getByText('VOUS ÊTES DANS LA TOUR')).toBeVisible(); await expect(page.locator('.game-canvas canvas')).toBeVisible(); }
+  for (const page of [a, b]) {
+    await page.goto(`${base}/`); await page.getByRole('button', { name: 'Jouer en invité', exact: true }).click(); await page.getByRole('button', { name: 'Commencer la partie', exact: true }).click(); await expect(page.getByText('VOUS ÊTES DANS LA TOUR')).toBeVisible(); await expect(page.locator('.game-canvas canvas')).toBeVisible();
+    await expect.poll(() => page.evaluate(() => window.towerDebug!.inspect().network.transport)).toBe(mode === 'auto' ? 'websocket' : 'polling');
+  }
   await expect(a.getByText('2 MAGES EN LIGNE')).toBeVisible(); await expect(b.getByText('2 MAGES EN LIGNE')).toBeVisible();
   await a.locator('.game-canvas').click(); await a.keyboard.down('Space'); await a.waitForTimeout(420); await a.keyboard.up('Space');
   await expect(a.locator('.stat-row').filter({ hasText: 'Record personnel' }).locator('strong')).not.toHaveText('0 m');
@@ -40,6 +46,18 @@ for (const unavailableWebSocket of [false, true]) test(`two browsers join, jump,
   await a.screenshot({ path: 'test-results/game-desktop.png', fullPage: true });
   await a.reload(); await a.getByRole('button', { name: 'Reprendre l’ascension', exact: true }).click(); await a.getByRole('button', { name: 'Commencer la partie', exact: true }).click(); await expect(a.getByText('VOUS ÊTES DANS LA TOUR')).toBeVisible();
   await expect(a.locator('.stat-row').filter({ hasText: 'Record personnel' }).locator('strong')).toHaveText(record);
+  if (mode === 'n0c') {
+    const playerId = await a.evaluate(() => window.towerDebug!.inspect().player!.id);
+    await first.setOffline(true);
+    await expect(a.getByText('VOUS ÊTES DANS LA TOUR')).not.toBeVisible();
+    await first.setOffline(false);
+    await expect(a.getByText('VOUS ÊTES DANS LA TOUR')).toBeVisible();
+    await expect.poll(() => a.evaluate(() => window.towerDebug!.inspect().network.transport)).toBe('polling');
+    await expect.poll(() => a.evaluate(() => window.towerDebug!.inspect().player!.id)).toBe(playerId);
+    await expect(a.locator('.stat-row').filter({ hasText: 'Record personnel' }).locator('strong')).toHaveText(record);
+    await expect(b.getByText('2 MAGES EN LIGNE')).toBeVisible();
+    expect(webSockets).toEqual([]);
+  }
   await a.setViewportSize({ width: 390, height: 844 }); await a.screenshot({ path: 'test-results/game-mobile.png', fullPage: true });
   expect(await a.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true); expect(errors).toEqual([]);
   // Close the Socket.IO session explicitly; abandoning a polling tab otherwise
@@ -47,7 +65,7 @@ for (const unavailableWebSocket of [false, true]) test(`two browsers join, jump,
   await a.getByRole('button', { name: 'Quitter la tour', exact: true }).click();
   await expect(b.getByText('1 MAGE EN LIGNE')).toBeVisible();
   await b.getByRole('button', { name: 'Quitter la tour', exact: true }).click();
-  await expect.poll(async () => (await (await b.request.get('http://localhost:5181/api/world')).json()).online).toBe(0);
+  await expect.poll(async () => (await (await b.request.get(`${base}/api/world`)).json()).online).toBe(0);
   await first.close(); await second.close();
 });
 

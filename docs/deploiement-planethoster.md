@@ -12,9 +12,11 @@ Le sous-domaine doit être rattaché à ce compte d'hébergement et disposer d'u
 certificat HTTPS valide. Le jeu sera accessible à sa racine, par exemple
 `https://tower.example.com/`.
 
-Vérifier auprès de PlanetHoster ces contraintes du jeu :
+Le support PlanetHoster confirme que N0C ne permet pas WebSocket et recommande
+Socket.IO sans WebSocket. Le jeu utilise donc HTTP long-polling sur cette cible.
+Vérifier auprès de PlanetHoster les autres contraintes du jeu :
 
-- connexions Socket.IO / WebSocket persistantes sur `/socket.io/` ;
+- requêtes HTTP long-polling Socket.IO sur `/socket.io/`, sans cache ni mise en tampon du proxy ;
 - **un seul processus de jeu** pour cette base de données ;
 - maintien du processus après la première visite, même sans joueurs ;
 - arrêt propre avant remplacement lors d'une mise à jour.
@@ -138,11 +140,13 @@ Passenger gère le port public : aucun accès public à `:3001` n'est nécessair
 ## 6. Vérifier avant de partager l'adresse
 
 - Ouvrir `https://TON-SOUS-DOMAINE/health` : `status` doit être `ok` et `storage`
-  doit être `postgresql`.
+  doit être `postgresql`, avec `socketTransport: "polling"`.
 - Ouvrir le jeu dans deux navigateurs, rejoindre avec deux joueurs et vérifier
   qu'ils se voient et peuvent se pousser.
-- Dans l'onglet Réseau du navigateur, vérifier la connexion WebSocket
-  `/socket.io/` et jouer plusieurs minutes sans déconnexion répétée.
+- Dans l'onglet Réseau du navigateur, vérifier les requêtes GET/POST
+  `/socket.io/?EIO=4&transport=polling…` et l'absence de tentative WebSocket
+  sur `/socket.io/`. Jouer plusieurs minutes, puis couper/rétablir le réseau
+  pour vérifier la reconnexion.
 - Créer un compte de test, modifier son apparence, puis arrêter et démarrer
   l'application dans N0C et vérifier que le compte et son apparence persistent.
 - Faire bloquer `/metrics` sur l'URL publique, comme le fait le proxy Docker fourni.
@@ -151,8 +155,8 @@ Passenger gère le port public : aucun accès public à `:3001` n'est nécessair
 
 Si le site affiche une erreur 500/503, consulter les journaux de l'application
 dans N0C. Vérifier d'abord la version Node, les dépendances, les valeurs de `.env`,
-la connexion PostgreSQL et l'exécution des migrations. Une erreur WebSocket ou
-des joueurs invisibles entre eux demande aussi de contrôler le proxy et le nombre
+la connexion PostgreSQL et l'exécution des migrations. Des erreurs HTTP polling ou
+des joueurs invisibles entre eux demandent aussi de contrôler le proxy et le nombre
 de processus avec PlanetHoster.
 
 Si toutes les adresses affichent « It works! NodeJS », c'est la page de démonstration
@@ -210,40 +214,44 @@ de la base ni recompilation du front. Démarrer l'application dans N0C puis vér
 `/health`. Si un affichage temporaire des erreurs détaillées a été activé dans
 le `.htaccess` public, restaurer sa configuration de production après le diagnostic.
 
-### Connexion WebSocket refusée par le proxy
+### Socket.IO sans WebSocket sur N0C
 
-Le client essaie WebSocket en premier, puis le transport HTTP de Socket.IO si
-l'ouverture échoue (`tryAllTransports: true`). La seule présence de `polling`
-dans la liste des transports n'active pas ce repli automatique.
+Réponse du support transmise le 16 septembre 2026 : WebSocket n'est pas disponible
+sur N0C. Leur [exemple Socket.IO](https://github.com/PlanetHoster/socket.io-exemple)
+illustre l'usage de Socket.IO sur cet hébergement. Le jeu utilise déjà Socket.IO 4 ;
+aucune nouvelle bibliothèque ni migration de sauvegardes n'est nécessaire.
 
-Sur la cible observée, la réponse WebSocket était `101 Switching Protocols`,
-mais avec `Connection: Keep-Alive` : le client refusait cette ouverture. Le repli
-HTTP a permis d'ouvrir la connexion et de recevoir le signal périodique du serveur.
-La correction du client se déploie avec `git pull` puis `npm run build` ; demander
-à l'hébergeur de corriger la transmission de l'en-tête `Connection: Upgrade`
-pour rétablir le transport WebSocket.
-Le test navigateur local couvre deux joueurs, le saut, le record et la reconnexion,
-avec puis sans WebSocket. Le contrôle public du transport ne constitue pas un
-playtest multijoueur sur l'hébergement.
+Le client ouvre désormais HTTP en premier. Avec `SOCKET_IO_TRANSPORT=polling`,
+le serveur limite les transports à `['polling']` et désactive les upgrades :
+le navigateur ne tente pas WebSocket, même lors d'une reconnexion.
+Ce mode est le défaut du lanceur N0C `app.cjs` et figure dans
+`ops/planethoster.env.example`. Pour le fixer explicitement dans une installation
+existante, ajouter à `project/.env` sans remplacer les autres valeurs :
 
-Contrôle du 16 septembre 2026 : le proxy renvoie toujours `Connection: Keep-Alive`
-sur la réponse HTTP/1.1 `101`, et aucun paquet Engine.IO n'arrive pendant les quatre
-secondes d'observation. Les corrections de gestion des files et d'envoi des positions
-améliorent le mode HTTP, mais ne réparent pas ce tunnel au niveau de l'hébergeur.
-Le bouton debug du jeu affiche le transport réellement utilisé (`polling` ou `websocket`).
+```dotenv
+SOCKET_IO_TRANSPORT=polling
+```
 
-Message prêt à transmettre au support :
+Si cette variable existe aussi dans le panneau N0C, y mettre `polling` : les
+variables du panneau ont priorité sur `.env`. Transférer le code mis à jour,
+exécuter `npm run build` dans `project` avec l'environnement Node N0C activé,
+puis redémarrer l'application et recharger la page du jeu.
+La recompilation est nécessaire pour remplacer l'ancien client qui essayait
+WebSocket en premier. Un changement ultérieur de la seule variable demande
+uniquement un redémarrage du serveur.
 
-> Bonjour, sur towerx.prjski.com, application N0C Node 22 « towerx-api »,
-> l'ouverture de `wss://towerx.prjski.com/socket.io/?EIO=4&transport=websocket`
-> renvoie HTTP 101 avec `Upgrade: websocket`, mais `Connection: Keep-Alive`
-> au lieu de `Connection: Upgrade`. Le navigateur refuse la connexion et le jeu
-> bascule en HTTP polling, avec de la latence. Pouvez-vous vérifier le proxy
-> LiteSpeed/Passenger et le tunnel WebSocket bidirectionnel sur `/socket.io/`,
-> y compris la réception du paquet d'ouverture Engine.IO et les ping/pong ?
-> Le jeu doit rester sur un seul processus Node persistant.
+Vérifier `socketTransport: "polling"` dans `/health` et `polling` dans le debug
+du jeu. Sur un autre hébergement compatible WebSocket, `SOCKET_IO_TRANSPORT=auto`
+permet HTTP puis une montée vers WebSocket ; c'est le défaut de `npm start`.
 
-Référence du support : [proxy WebSocket Node automatique de LiteSpeed](https://docs.litespeedtech.com/lsws/cp/cpanel/cloudlinux/#nodejs-automatic-websocket-proxy).
+L'ancien contrôle public montrait un `101 Switching Protocols` avec
+`Connection: Keep-Alive` et aucun paquet Engine.IO pendant quatre secondes.
+L'annonce du support remplace la demande précédente de réparation de ce tunnel.
+La connexion HTTP directe évite l'attente d'une tentative WebSocket vouée à
+l'échec ; elle ne garantit pas un ping plus faible pendant une partie qui utilisait
+déjà HTTP. Les files bornées, snapshots récents et lissage existants restent actifs.
+Mesurer le ping et la fluidité sur N0C après déploiement ; les tests locaux ne
+reproduisent pas le proxy, sa charge ou le trajet Internet.
 
 ## Nombre de compagnons
 
@@ -280,12 +288,15 @@ Ne pas forcer un `git pull` en cas de conflit : examiner les fichiers concernés
 - [Port géré par Passenger](https://www.phusionpassenger.com/docs/advanced_guides/in_depth/node/reverse_port_binding.html)
 - [Réglages des processus Passenger](https://www.phusionpassenger.com/docs/references/config_reference/apache/)
 - [Cibles binaires du client Prisma 6](https://docs.prisma.io/docs/orm/v6/reference/prisma-schema-reference#binarytargets-options)
-- [Repli entre transports Socket.IO](https://socket.io/docs/v4/client-options/#tryalltransports)
+- [Transports du client Socket.IO](https://socket.io/docs/v4/client-options/#transports)
+- [Transports et upgrades du serveur Socket.IO](https://socket.io/docs/v4/server-options/#transports)
+- [Exemple PlanetHoster](https://github.com/PlanetHoster/socket.io-exemple)
 
 Cette préparation ne constitue pas un déploiement sur ton compte. Les réglages
-Passenger, le HTTPS et les connexions WebSocket doivent être validés sur la cible.
+Passenger, le HTTPS et HTTP long-polling doivent être validés sur la cible.
 Le lanceur a été vérifié localement avec PostgreSQL temporaire, le front compilé,
-deux joueurs WebSocket et une session conservée après arrêt puis redémarrage.
+deux joueurs WebSocket et une session conservée après arrêt puis redémarrage
+avant le passage au mode HTTP uniquement.
 Le démarrage via le lanceur à la racine a aussi été vérifié avec le chargeur Node.js
 officiel de Passenger 6.0.26 et une requête `/health` sur sa socket Unix. Ce test
 ne reproduit pas toute la configuration N0C/LiteSpeed du serveur cible.

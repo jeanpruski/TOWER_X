@@ -6,6 +6,14 @@
 
 En production, React est construit par Vite et servi comme fichiers statiques par Express. Phaser est chargé à l’entrée dans le jeu. Caddy termine TLS et relaie les WebSockets. Le serveur HTTP n’accepte aucun endpoint permettant au client de fixer son altitude, son record ou son camp.
 
+Le client Socket.IO ouvre d’abord une connexion HTTP long-polling, puis utilise
+WebSocket seulement si le serveur le propose. Sur N0C, `app.cjs` définit par défaut
+`SOCKET_IO_TRANSPORT=polling` après lecture de `.env` : le serveur n’accepte que
+HTTP et n’annonce aucune montée vers WebSocket, y compris aux reconnexions.
+Le mode `auto`, défaut du démarrage standard hors N0C, autorise les deux transports.
+`/health` expose le mode configuré dans `socketTransport` ; le debug du jeu affiche
+le transport réellement utilisé. La simulation et les actions versionnées sont identiques.
+
 ## Simulation et unités
 
 - Positions en pixels logiques ; `y` augmente vers le haut et désigne les pieds du personnage.

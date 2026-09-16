@@ -2,8 +2,11 @@ import { test, expect } from '@playwright/test';
 
 test.afterEach(async ({ page }) => { await page.unrouteAll({ behavior: 'ignoreErrors' }); });
 
-for (const transport of ['polling', 'websocket']) test(`${transport} with 150–230 ms round trips keeps jumps and position updates responsive`, async ({ page }) => {
-  if (transport === 'polling') await page.addInitScript(() => {
+for (const mode of ['polling', 'websocket', 'n0c']) test(`${mode} with 150–230 ms round trips keeps jumps and position updates responsive`, async ({ page }) => {
+  const transport = mode === 'websocket' ? 'websocket' : 'polling';
+  const webSockets: string[] = [];
+  page.on('websocket', socket => { if (new URL(socket.url()).pathname.startsWith('/socket.io/')) webSockets.push(socket.url()); });
+  if (mode === 'polling') await page.addInitScript(() => {
     const NativeWebSocket = window.WebSocket;
     window.WebSocket = class extends NativeWebSocket {
       constructor(url: string | URL, protocols?: string | string[]) {
@@ -38,7 +41,7 @@ for (const transport of ['polling', 'websocket']) test(`${transport} with 150–
     socket.onClose(() => { for (const timer of timers) clearTimeout(timer); server.close(); });
     server.onClose(() => { for (const timer of timers) clearTimeout(timer); socket.close(); });
   });
-  await page.goto('http://localhost:5186/');
+  await page.goto(mode === 'n0c' ? 'http://localhost:5187/' : 'http://localhost:5186/');
   await page.getByRole('button', { name: 'Jouer en invité', exact: true }).click();
   await page.getByRole('button', { name: 'Commencer la partie', exact: true }).click();
   await expect(page.getByText('VOUS ÊTES DANS LA TOUR')).toBeVisible();
@@ -65,11 +68,13 @@ for (const transport of ['polling', 'websocket']) test(`${transport} with 150–
     hardCorrections: readings.at(-1)!.hardCorrections,
     maxHeight: Math.max(...readings.map(r => r.y)),
   };
-  console.log(`Delayed ${transport}:`, JSON.stringify(metrics));
+  console.log(`Delayed ${mode}:`, JSON.stringify(metrics));
   await test.info().attach('network-metrics', { body: JSON.stringify({ metrics, readings }, null, 2), contentType: 'application/json' });
   expect(metrics.maxHeight).toBeGreaterThan(40);
   expect(metrics.maxPending).toBeLessThan(24);
   expect(metrics.maxSnapshotAge).toBeLessThan(400);
   expect(metrics.maxCorrection).toBeLessThan(40);
   expect(metrics.hardCorrections).toBe(0);
+  if (mode === 'n0c') expect(webSockets).toEqual([]);
+  await page.getByRole('button', { name: 'Quitter la tour', exact: true }).click();
 });

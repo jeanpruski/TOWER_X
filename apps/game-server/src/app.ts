@@ -11,7 +11,7 @@ import { Store } from './store';
 import { Auth, RateLimiter, authRouter } from './auth';
 import { World } from './world';
 
-export interface AppOptions { dataFile: string; secret: string; production?: boolean; origin?: string; databaseUrl?: string; devTools?: boolean; silent?: boolean; bots?: number; }
+export interface AppOptions { dataFile: string; secret: string; production?: boolean; origin?: string; databaseUrl?: string; devTools?: boolean; silent?: boolean; bots?: number; socketTransport?: 'auto' | 'polling'; }
 export async function createApp(options: AppOptions) {
   const log = pino({ level: options.silent ? 'silent' : 'info' });
   const store = await Store.open(options.dataFile, options.databaseUrl);
@@ -44,6 +44,8 @@ export async function createApp(options: AppOptions) {
   });
   const connectionLimit = new RateLimiter(60, 60000);
   const io = new Server<ClientToServerEvents, ServerToClientEvents>(http, {
+    transports: options.socketTransport === 'polling' ? ['polling'] : ['polling', 'websocket'],
+    allowUpgrades: options.socketTransport !== 'polling',
     maxHttpBufferSize: 8192, pingInterval: 10000, pingTimeout: 10000,
     allowRequest: (req, callback) => {
       const origin = req.headers.origin;
@@ -63,7 +65,7 @@ export async function createApp(options: AppOptions) {
   });
   app.get('/api/leaderboard', (_req, res) => res.json({ players: [...store.state.profiles].filter(p => p.personalBest > 0).sort((a, b) => b.personalBest - a.personalBest).slice(0, 10).map(p => ({ id: p.id, displayName: p.displayName, color: p.color, mask: p.mask, hat: p.hat, shoes: p.shoes, shoeColor: p.shoeColor, hatColor: p.hatColor, personalBest: p.personalBest })) }));
   app.use('/api', (_req, res) => res.status(404).json({ error: 'Cette route n’existe pas.' }));
-  app.get('/health', (_req, res) => res.json({ status: 'ok', version: '0.1.0', tick: world.tick, players: world.online, storage: options.databaseUrl ? 'postgresql' : 'file' }));
+  app.get('/health', (_req, res) => res.json({ status: 'ok', version: '0.1.0', tick: world.tick, players: world.online, storage: options.databaseUrl ? 'postgresql' : 'file', socketTransport: options.socketTransport ?? 'auto' }));
   app.get('/metrics', (_req, res) => res.type('text/plain').send([
     `tower_players ${world.online}`, `tower_bots ${world.botCount}`, `tower_tick_duration_ms ${world.tickMs.toFixed(3)}`,
     `tower_tick_max_ms ${world.maxTickMs.toFixed(3)}`, `tower_active_chunks ${world.chunks.size}`,

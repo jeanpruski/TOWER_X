@@ -216,7 +216,7 @@ Ces valeurs décrivent ce test sur cette machine. Elles ne prédisent pas la lat
 
 Le test `tests/e2e/network.spec.ts` effectue cinq sauts dans Chrome, sur un monde
 temporaire sans bots, avec 75 ms de délai par sens et 40 ms de jitter périodique.
-Il couvre WebSocket ainsi que son échec réel suivi du repli HTTP polling.
+Il couvrait WebSocket ainsi que son échec réel suivi du repli HTTP polling.
 Les messages WebSocket conservent leur ordre ; les requêtes HTTP sont retardées
 avant transmission et après réception. Les relevés sont joints au rapport Playwright.
 
@@ -231,7 +231,7 @@ du ping chez PlanetHoster. Les tests vérifient aussi l'absence de correction d�
 le seuil de téléportation pendant ces sauts, ainsi que leur hauteur effective.
 La simulation distante reste autoritaire : le lissage ne modifie pas les collisions.
 
-La suite contient 100 tests unitaires/intégration, dont les reprises après trou de
+Cette première validation comprenait 100 tests unitaires/intégration, dont les reprises après trou de
 séquence, les sauts brefs dans un lot de commandes, l'attente des plateformes à
 l'arrivée, les snapshots anciens, le retour au camp et les timeouts de ping.
 La compilation et la validation des 800 chunks solo, 200 chunks coopératifs et
@@ -241,8 +241,41 @@ et le choix du départ. Les scénarios de transport utilisent un monde séparé 
 ne pas épuiser les quotas d'authentification des autres fixtures ; les deux visiteurs
 quittent explicitement la tour avant la fermeture de leurs contextes HTTP.
 
-Le WebSocket public reste défectueux au contrôle du proxy ; un playtest humain
-sur l'hébergement après déploiement et intervention du support reste nécessaire.
+Le contrôle du proxy montrait un WebSocket défectueux. Le support a ensuite
+confirmé que N0C ne prend pas WebSocket en charge et recommande Socket.IO en HTTP.
+Un playtest humain sur l'hébergement après déploiement reste nécessaire.
+
+## Mode HTTP N0C du 16 septembre 2026
+
+Le client se connecte désormais en HTTP dès le départ. Le lanceur N0C active
+`SOCKET_IO_TRANSPORT=polling` par défaut : aucun upgrade WebSocket n'est annoncé
+ni accepté par le serveur. Les autres déploiements gardent le mode `auto`.
+
+`npm run build` et les 104 tests de `npm test` passent. Les quatre nouveaux tests
+d'intégration utilisent des mondes temporaires pour vérifier le handshake, le mode
+exposé par `/health`, le refus de WebSocket en mode HTTP, l'authentification et la
+réception des snapshots. Les six scénarios navigateur pertinents passent :
+deux joueurs et sauts sous délai dans chacun des modes WebSocket, HTTP avec
+WebSocket bloqué et HTTP uniquement comme N0C. Ce dernier vérifie l'absence de
+toute tentative WebSocket, y compris après rechargement et coupure/rétablissement
+du réseau, ainsi que la conservation de l'identité et du record.
+
+Relevé d'un passage Chrome local, avec le délai injecté de 150–230 ms aller-retour
+du scénario existant (cinq sauts, neuf secondes de relevés) :
+
+| Maximum observé | HTTP avec WebSocket bloqué | HTTP uniquement N0C | WebSocket |
+| --- | ---: | ---: | ---: |
+| Commandes non confirmées | 21 | 20 | 9 |
+| Âge du dernier snapshot reçu | 233 ms | 233 ms | 106 ms |
+| Écart physique à réconcilier | 23,44 px | 9,37 px | 17,06 px |
+| Corrections dépassant le seuil de téléportation | 0 | 0 | 0 |
+
+Ces observations varient selon le moment des entrées et des snapshots ; elles
+ne démontrent pas un gain de latence entre les deux modes HTTP. Le bénéfice visé
+est la suppression des tentatives WebSocket inutiles à la connexion sur N0C.
+Ce test utilise des navigateurs automatisés et un serveur local, sans proxy
+PlanetHoster ni déploiement de cette version sur le compte. Aucun gain de ping
+Internet ni résultat de playtest humain n'est mesuré ici.
 
 ## Points encore à éprouver
 

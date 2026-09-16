@@ -28,7 +28,9 @@ export class GameClient {
   private pingTimer: ReturnType<typeof setInterval>; private onChange: (state: GameState) => void;
   constructor(settings: Settings, onChange: (state: GameState) => void, onMenu: () => void, onProfile: (profile: PublicProfile) => void, entry: EntryChoice = { mode: 'saved' }, onEntryRejected: (message: string) => void = () => {}) {
     this.onChange = onChange; this.input = new InputController(settings, onMenu); this.audio = new GameAudio(settings);
-    this.socket = io({ autoConnect: false, withCredentials: true, reconnectionDelay: 500, reconnectionDelayMax: 3000, transports: ['websocket', 'polling'], tryAllTransports: true });
+    // Start over HTTP; only probe WebSocket when the server advertises it.
+    // N0C disables upgrades, including on every reconnection.
+    this.socket = io({ autoConnect: false, withCredentials: true, reconnectionDelay: 500, reconnectionDelayMax: 3000, transports: ['polling', 'websocket'] });
     let joined = false;
     this.socket.on('connect', () => this.socket.emit('join', { v: 1, ...(joined ? {} : { entry }) }));
     this.socket.on('joinRejected', data => { if (data.v === 1) onEntryRejected(data.message); });
